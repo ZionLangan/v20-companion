@@ -1,0 +1,150 @@
+{
+  "id": "vtm-brujah-valeria",
+  "version": 1,
+  "meta": {
+    "name": "Valeria Orlov",
+    "player": "Sample Seed",
+    "chronicle": "Glass City Nights",
+    "concept": "Brujah enforcer and union organizer",
+    "supernaturalType": "Kindred",
+    "supernaturalSubtype": "Brujah",
+    "faction": { "type": "Clan", "value": "Brujah" },
+    "nature": "Soldier",
+    "demeanor": "Bravo",
+    "age": 74,
+    "apparentAge": 27,
+    "pronouns": "she/her",
+    "notes": [
+      "Prefers direct action over politicking",
+      "Keeps the Anarch bar \"Wrecking Yard\" as her staging ground"
+    ]
+  },
+  "traits": {
+    "attributes": {
+      "physical": { "strength": 4, "dexterity": 3, "stamina": 3 },
+      "social": { "charisma": 3, "manipulation": 2, "appearance": 3 },
+      "mental": { "perception": 3, "intelligence": 2, "wits": 3 }
+    },
+    "abilities": {
+      "talents": {
+        "alertness": 3,
+        "athletics": 3,
+        "awareness": 2,
+        "brawl": 4,
+        "empathy": 2,
+        "expression": 2,
+        "intimidation": 4,
+        "leadership": 3,
+        "streetwise": 3,
+        "subterfuge": 2
+      },
+      "skills": {
+        "animalKen": 1,
+        "crafts": 2,
+        "drive": 2,
+        "etiquette": 1,
+        "firearms": 2,
+        "larceny": 2,
+        "melee": 3,
+        "performance": 0,
+        "stealth": 2,
+        "survival": 2
+      },
+      "knowledges": {
+        "academics": 1,
+        "computer": 1,
+        "finance": 1,
+        "investigation": 2,
+        "law": 1,
+        "medicine": 0,
+        "occult": 2,
+        "politics": 2,
+        "science": 0,
+        "technology": 1
+      }
+    }
+  },
+  "advantages": {
+    "backgrounds": [
+      { "name": "Allies", "rating": 2, "description": "Dockworkers loyal to Valeria" },
+      { "name": "Contacts", "rating": 3, "description": "Union reps and sympathetic cops" },
+      { "name": "Herd", "rating": 2, "description": "Regulars at the Wrecking Yard" },
+      { "name": "Resources", "rating": 1, "description": "Modest savings and the bar" }
+    ],
+    "virtues": { "conscience": 3, "selfControl": 4, "courage": 4 },
+    "morality": { "type": "Humanity", "rating": 7, "notes": "Clings to mortal ideals" },
+    "willpower": { "permanent": 6, "current": 5 },
+    "health": [
+      { "level": "Bruised", "state": "ok" },
+      { "level": "Hurt", "state": "ok" },
+      { "level": "Injured", "state": "ok" },
+      { "level": "Wounded", "state": "ok" },
+      { "level": "Mauled", "state": "ok" },
+      { "level": "Crippled", "state": "ok" },
+      { "level": "Incapacitated", "state": "ok" }
+    ],
+    "resourcePools": [
+      { "name": "Vitae", "type": "blood", "capacity": 13, "current": 10, "notes": "10th generation" }
+    ]
+  },
+  "powerSets": [
+    {
+      "name": "Celerity",
+      "category": "discipline",
+      "rating": 3,
+      "powers": [
+        { "name": "Cat's Grace", "rating": 2, "description": "Ignore balance penalties" },
+        { "name": "Blurred Reflexes", "rating": 3, "description": "Add Dexterity dice to defense draws" }
+      ],
+      "tags": ["brujah", "physical"],
+      "notes": "Reflexive blood spends per V20 p. 144"
+    },
+    {
+      "name": "Potence",
+      "category": "discipline",
+      "rating": 3,
+      "powers": [
+        { "name": "Prowess", "rating": 2, "description": "One automatic success on Strength rolls" },
+        { "name": "Fist of Caine", "rating": 3, "description": "Add Potence to damage without extra blood" }
+      ],
+      "tags": ["brujah", "physical"],
+      "notes": "Free automatic successes stack with melee"
+    },
+    {
+      "name": "Presence",
+      "category": "discipline",
+      "rating": 2,
+      "powers": [
+        { "name": "Awe", "rating": 1, "description": "Charisma+Performance roll to entrance mortals" },
+        { "name": "Dread Gaze", "rating": 2, "description": "Opposed Charisma+Intimidation versus Willpower" }
+      ],
+      "tags": ["social"],
+      "notes": "Line of sight, lasts scene"
+    }
+  ],
+  "merits": [
+    { "name": "Natural Leader", "rating": 1, "description": "+2 dice when leading cooperative actions" },
+    { "name": "Brujah Antitribu Contact", "rating": 2, "description": "Call in Sabbat intel once per story" }
+  ],
+  "flaws": [
+    { "name": "Short Fuse", "rating": 2, "description": "+2 difficulty to resist frenzy" },
+    { "name": "Clan Compulsion: Rebellion", "rating": 0, "description": "When stressed she must challenge authority or suffer -2 dice on social pools for a scene." },
+    { "name": "Clan Bane: Brujah Fury", "rating": 0, "description": "Difficulty +2 to resist frenzy from insults or provocation." }
+  ],
+  "equipment": {
+    "inventory": [
+      { "name": "Customized gloves", "type": "weapon", "description": "Weighted sap gloves" },
+      { "name": "Wrecking Yard keys", "type": "key", "description": "Opens every door and cellar" }
+    ],
+    "stored": [
+      { "name": "Backup ruck", "type": "gear", "location": "Bar office", "description": "Flak vest, docs" }
+    ],
+    "assets": [
+      { "name": "Wrecking Yard Bar", "type": "business", "description": "Safe Herd site" }
+    ]
+  },
+  "notes": [
+    "Favors Dex+Brawl pools with specialty Brass Knuckles",
+    "Has a coterie truce with city Brujah primogen"
+  ]
+}

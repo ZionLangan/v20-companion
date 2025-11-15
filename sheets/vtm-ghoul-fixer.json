@@ -1,0 +1,139 @@
+{
+  "id": "vtm-ghoul-fixer",
+  "version": 1,
+  "meta": {
+    "name": "Mateo Serrano",
+    "player": "Sample Seed",
+    "chronicle": "Glass City Nights",
+    "concept": "Ventrue ghoul fixer",
+    "supernaturalType": "Ghoul",
+    "supernaturalSubtype": "Ventrue Retainer",
+    "faction": { "type": "Regnant", "value": "Prince Elowen (Ventrue)" },
+    "nature": "Survivor",
+    "demeanor": "Bon Vivant",
+    "age": 42,
+    "pronouns": "he/him",
+    "notes": [
+      "Maintains mortal finance shell companies",
+      "Addicted to vitae but still ambitious"
+    ]
+  },
+  "traits": {
+    "attributes": {
+      "physical": { "strength": 3, "dexterity": 3, "stamina": 3 },
+      "social": { "charisma": 3, "manipulation": 4, "appearance": 3 },
+      "mental": { "perception": 3, "intelligence": 3, "wits": 3 }
+    },
+    "abilities": {
+      "talents": {
+        "alertness": 2,
+        "athletics": 2,
+        "awareness": 2,
+        "brawl": 2,
+        "empathy": 3,
+        "expression": 2,
+        "intimidation": 2,
+        "leadership": 2,
+        "streetwise": 3,
+        "subterfuge": 3
+      },
+      "skills": {
+        "animalKen": 0,
+        "crafts": 1,
+        "drive": 2,
+        "etiquette": 3,
+        "firearms": 2,
+        "larceny": 2,
+        "melee": 1,
+        "performance": 1,
+        "stealth": 2,
+        "survival": 1
+      },
+      "knowledges": {
+        "academics": 2,
+        "computer": 2,
+        "finance": 4,
+        "investigation": 2,
+        "law": 2,
+        "medicine": 1,
+        "occult": 2,
+        "politics": 3,
+        "science": 1,
+        "technology": 2
+      }
+    }
+  },
+  "advantages": {
+    "backgrounds": [
+      { "name": "Resources", "rating": 3, "description": "Corporate shells" },
+      { "name": "Retainers", "rating": 2, "description": "Mortals on the payroll" },
+      { "name": "Contacts", "rating": 3, "description": "City officials" }
+    ],
+    "virtues": { "conscience": 2, "selfControl": 3, "courage": 4 },
+    "morality": { "type": "Humanity", "rating": 6, "notes": "Skirts legal lines" },
+    "willpower": { "permanent": 5, "current": 4 },
+    "health": [
+      { "level": "Bruised", "state": "ok" },
+      { "level": "Hurt", "state": "ok" },
+      { "level": "Injured", "state": "ok" },
+      { "level": "Wounded", "state": "ok" },
+      { "level": "Mauled", "state": "ok" },
+      { "level": "Crippled", "state": "ok" },
+      { "level": "Incapacitated", "state": "ok" }
+    ],
+    "resourcePools": [
+      { "name": "Vitae Reserve", "type": "blood", "capacity": 10, "current": 4, "notes": "Ghouls cap at 10 minus current Bond" }
+    ]
+  },
+  "powerSets": [
+    {
+      "name": "Ghoul Potence",
+      "category": "discipline",
+      "rating": 1,
+      "powers": [
+        { "name": "Unnatural Might", "rating": 1, "description": "Spend 1 Vitae for +1 automatic damage success" }
+      ],
+      "notes": "Ghouls access level 1 disciplines taught by regnant"
+    },
+    {
+      "name": "Ghoul Celerity",
+      "category": "discipline",
+      "rating": 1,
+      "powers": [
+        { "name": "Quickened Pulse", "rating": 1, "description": "+1 die to Dex pools for a turn" }
+      ],
+      "notes": "Costs 1 Vitae per extra action"
+    },
+    {
+      "name": "Dominate Coaching",
+      "category": "discipline",
+      "rating": 1,
+      "powers": [
+        { "name": "Mesmeric Conditioning", "rating": 1, "description": "Mateo knows scripted commands to relay" }
+      ],
+      "notes": "Represents practiced hypnotic cues"
+    }
+  ],
+  "merits": [
+    { "name": "Enchanting Voice", "rating": 2, "description": "-2 difficulty on social rolls involving speech" }
+  ],
+  "flaws": [
+    { "name": "Addiction: Vitae", "rating": 3, "description": "Self-Control roll diff 8 to resist feeding" }
+  ],
+  "equipment": {
+    "inventory": [
+      { "name": "Encrypted phone", "type": "tech", "description": "Secure chat with regnant" },
+      { "name": "Credit chits", "type": "resource", "description": "Quick hush money" }
+    ],
+    "stored": [
+      { "name": "Safehouse locker", "type": "gear", "location": "Harbor storage", "description": "Fake IDs and weapons" }
+    ],
+    "assets": [
+      { "name": "Holding company", "type": "business", "description": "Masks regnant investments" }
+    ]
+  },
+  "notes": [
+    "Treat Physical dice pools as mortal unless Vitae-fueled",
+    "Bonded to Ventrue; Dominate commands auto succeed if he fails Self-Control"
+  ]
+}

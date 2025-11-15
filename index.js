@@ -12,7 +12,6 @@ import {
     lastActionWasSwipe,
     isGenerating,
     isPlotProgression,
-    pendingDiceRoll,
     FALLBACK_AVATAR_DATA_URI,
     $panelContainer,
     $userStatsContainer,
@@ -29,7 +28,6 @@ import {
     setLastActionWasSwipe,
     setIsGenerating,
     setIsPlotProgression,
-    setPendingDiceRoll,
     setPanelContainer,
     setUserStatsContainer,
     setInfoBoxContainer,
@@ -38,6 +36,7 @@ import {
     setQuestsContainer
 } from './src/core/state.js';
 import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSwipeData } from './src/core/persistence.js';
+import { loadBundledSheets } from './src/core/sheets.js';
 import { registerAllEvents } from './src/core/events.js';
 
 // Generation & Parsing modules
@@ -578,6 +577,13 @@ jQuery(async () => {
             loadSettings();
         } catch (error) {
             console.error('[RPG Companion] Settings load failed, continuing with defaults:', error);
+        }
+
+        // Load bundled WoD sheets from disk before wiring UI
+        try {
+            await loadBundledSheets();
+        } catch (error) {
+            console.error('[RPG Companion] Bundled sheet load failed:', error);
         }
 
         // Add extension settings to Extensions tab

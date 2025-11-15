@@ -28,35 +28,6 @@
                 <div id="rpg-user-stats" class="rpg-section rpg-stats-section">
                     <!-- Content will be populated by JavaScript -->
                 </div>
-
-                <!-- Divider after User Stats -->
-                <div id="rpg-divider-stats" class="rpg-divider"></div>
-
-                <!-- Info Box Section -->
-                <div id="rpg-info-box" class="rpg-section rpg-info-section">
-                    <!-- Content will be populated by JavaScript -->
-                </div>
-
-                <!-- Divider after Info Box -->
-                <div id="rpg-divider-info" class="rpg-divider"></div>
-
-                <!-- Character Thoughts Section -->
-                <div id="rpg-thoughts" class="rpg-section rpg-thoughts-section">
-                    <!-- Content will be populated by JavaScript -->
-                </div>
-
-                <!-- Divider after Thoughts -->
-                <div id="rpg-divider-thoughts" class="rpg-divider"></div>
-
-                <!-- Inventory Section -->
-                <div id="rpg-inventory" class="rpg-section rpg-inventory-section">
-                    <!-- Content will be populated by JavaScript -->
-                </div>
-
-                <!-- Quests Section -->
-                <div id="rpg-quests" class="rpg-section rpg-quests-section">
-                    <!-- Content will be populated by JavaScript -->
-                </div>
             </div>
 
             <!-- HTML Prompt Toggle -->
@@ -302,29 +273,77 @@
         </header>
 
         <div class="rpg-dice-popup-body">
-            <div class="rpg-dice-selector-container">
-                <div class="rpg-dice-selector">
-                    <div class="rpg-dice-input-group">
-                        <label for="rpg-dice-count">Number of Dice:</label>
-                        <input type="number" id="rpg-dice-count" name="dice-count" min="1" max="20" value="1" class="rpg-input" />
-                    </div>
-                    <div class="rpg-dice-input-group">
-                        <label for="rpg-dice-sides">Dice Type:</label>
-                        <select id="rpg-dice-sides" name="dice-sides" class="rpg-select">
-                            <option value="4">d4</option>
-                            <option value="6">d6</option>
-                            <option value="8">d8</option>
-                            <option value="10">d10</option>
-                            <option value="12">d12</option>
-                            <option value="20" selected>d20</option>
-                            <option value="100">d100</option>
-                        </select>
-                    </div>
+            <div class="wod-dice-form">
+                <div class="wod-dice-field">
+                    <label for="wod-dice-sheet">Character Sheet</label>
+                    <select id="wod-dice-sheet" class="rpg-select"></select>
                 </div>
-                <button id="rpg-dice-roll-btn" class="rpg-btn-primary" type="button">
-                    <i class="fa-solid fa-dice" aria-hidden="true"></i>
-                    <span>Roll Dice</span>
-                </button>
+                <div class="wod-dice-field">
+                    <label for="wod-dice-attribute">Attribute</label>
+                    <select id="wod-dice-attribute" class="rpg-select"></select>
+                </div>
+                <div class="wod-dice-field">
+                    <label for="wod-dice-ability">Ability</label>
+                    <select id="wod-dice-ability" class="rpg-select"></select>
+                </div>
+                <div class="wod-dice-field">
+                    <label for="wod-dice-extra">Extra Dice</label>
+                    <input type="number" id="wod-dice-extra" class="rpg-input" value="0" min="-10" max="10" />
+                </div>
+                <div class="wod-dice-field">
+                    <label for="wod-dice-modifier">Modifier</label>
+                    <input type="number" id="wod-dice-modifier" class="rpg-input" value="0" min="-10" max="10" />
+                </div>
+                <div class="wod-dice-field">
+                    <label for="wod-dice-difficulty">Difficulty</label>
+                    <select id="wod-dice-difficulty" class="rpg-select">
+                        <option value="3">3 (Easy)</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6" selected>6 (Standard)</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10 (Heroic)</option>
+                    </select>
+                </div>
+                <div class="wod-dice-field">
+                    <label for="wod-dice-explode">10-Again Rule</label>
+                    <select id="wod-dice-explode" class="rpg-select">
+                        <option value="10-again" selected>10-again</option>
+                        <option value="9-again">9-again</option>
+                        <option value="8-again">8-again</option>
+                        <option value="no-again">No-again</option>
+                    </select>
+                </div>
+                <div class="wod-dice-flags">
+                    <label class="checkbox_label">
+                        <input type="checkbox" id="wod-dice-specialty" />
+                        <span>Specialty applies</span>
+                    </label>
+                    <label class="checkbox_label">
+                        <input type="checkbox" id="wod-dice-willpower" />
+                        <span>Spend Willpower</span>
+                    </label>
+                </div>
+                <div class="wod-dice-field">
+                    <label for="wod-dice-rerolls">Bonus Rerolls</label>
+                    <input type="number" id="wod-dice-rerolls" class="rpg-input" value="0" min="0" max="20" />
+                </div>
+                <div class="wod-dice-field">
+                    <label for="wod-dice-label">Roll Label</label>
+                    <input type="text" id="wod-dice-label" class="rpg-input" placeholder="Dexterity + Drive chase roll" />
+                </div>
+                <div class="wod-dice-field">
+                    <label for="wod-dice-notes">Notes</label>
+                    <textarea id="wod-dice-notes" class="rpg-input" rows="2" placeholder="Add optional context (power use, scene notes)"></textarea>
+                </div>
+                <div class="wod-dice-actions">
+                    <button id="rpg-dice-roll-btn" class="rpg-btn-primary" type="button">
+                        <i class="fa-solid fa-dice" aria-hidden="true"></i>
+                        <span>Roll Pool</span>
+                    </button>
+                </div>
             </div>
 
             <div id="rpg-dice-animation" class="rpg-dice-animation" hidden aria-live="polite" aria-busy="true">
@@ -338,10 +357,6 @@
                 <div class="rpg-dice-result-label">Result:</div>
                 <output id="rpg-dice-result-value" class="rpg-dice-result-value" for="rpg-dice-count rpg-dice-sides">0</output>
                 <div id="rpg-dice-result-details" class="rpg-dice-result-details" role="status"></div>
-                <button id="rpg-dice-save-btn" class="rpg-btn-primary rpg-dice-save-btn" type="button">
-                    <i class="fa-solid fa-check" aria-hidden="true"></i>
-                    <span>Save Roll</span>
-                </button>
             </div>
         </div>
     </div>

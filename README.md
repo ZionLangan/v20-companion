@@ -2,6 +2,24 @@
 
 An immersive RPG extension for browsers that tracks character stats, scene information, and character thoughts in a beautiful, customizable UI panel. All automated! Works with any preset. Choose between Together or Separate generation modes for context and generation control.
 
+## World of Darkness v20 Sheets
+
+The v20 overhaul replaces the generic tracker panels with a fully structured WoD character sheet editor:
+
+- Load multiple JSON sheets from `sheets/` and swap between them via the new character selector.
+- Edit Attributes, Abilities, Backgrounds, Virtues, Willpower, resource pools, health states, powers, merits/flaws, equipment, and notes directly inside the sidebar. All controls enforce WoD dot/box limits.
+- Every edit is tracked per chat via SillyTavern persistence (dirty sheets are flagged with a “Chat override” pill). Dice rolls launched from the modal automatically appear in the built-in dice log panel so both you and the LLM can reference authoritative results.
+
+### Manual JSON Sync
+
+Sheets remain file-backed so you can keep authoritative copies in version control:
+
+1. Open the active character and click **Sync to File** in the toolbar.
+2. Copy the rendered JSON into `sheets/<sheet-id>.json` (or your custom file) with a text editor.
+3. Reload the extension or tap the **Reset to File** button to drop the chat override once the on-disk file matches your edits.
+
+Any chat-specific tweaks are stored under `chat_metadata.rpg_companion_v20`, so swipes/regenerations preserve sheet state even if the source JSON changes underneath.
+
 [![My Discord](https://img.shields.io/badge/Discord-Join%20Server-7289da)](https://discord.com/invite/KdAkTg94ME)
 [![Support Me](https://img.shields.io/badge/Ko--fi-Support%20Creator-ff5e5b)](https://ko-fi.com/marinara_spaghetti)
 
@@ -142,6 +160,20 @@ Cons:
 2. Choose your generation mode: Together or Separate
 3. Select which panels to display (User Stats, Info Box, Character Thoughts)
 4. Start chatting! The tracker updates automatically
+
+### WoD Sheet Files & Manual Editing
+
+- Bundled character sheets now live in `sheets/`. The extension reads `sheet-index.json` on startup and hydrates every listed JSON file into the WoD registry automatically.
+- To customize a baseline sheet, open its JSON file in a text editor, adjust the fields defined in `docs/wod-spec.md`, and refresh SillyTavern (or toggle the extension off/on). The loader fetches the file on every page load, so your edits appear immediately.
+- Session-specific tweaks stay in `chat_metadata.rpg_companion_v20` as overrides with timestamps. File edits always win when IDs collide, but the chat metadata keeps your latest per-chat adjustments layered on top.
+- Keep the schema handy by referencing `docs/vtm-v20-reference.md` for condensed mechanical summaries (Backgrounds, Disciplines, Banes, etc.) before editing the JSON.
+
+### WoD Dice Engine & LLM Rolls
+
+- Open the dice modal from the sidebar to roll Attribute + Ability pools pulled directly from the active sheet. The modal supports difficulty selection, explosion rules (10-/9-/8-again), bonus dice, rerolls, willpower spends, and free-form notes; every roll is logged automatically.
+- The dice display now shows the most recent WoD log entry instead of generic NdM output. Use the clear button if you need to wipe the local log for a scene reset.
+- The LLM can request authoritative rolls mid-response by emitting a single tag such as `[[WOD-ROLL {"sheetId":"vtm-brujah-valeria","pool":"Dexterity + Brawl","difficulty":6,"willpower":false}]]`. The extension executes the pool, replaces the tag with a human-readable summary, and records the outcome so future prompts stay consistent.
+- Logs persist per chat via `chat_metadata.rpg_companion_v20`, so dice references remain authoritative across swipes, reloads, and manual JSON edits.
 
 ### Editing Tracker Data
 

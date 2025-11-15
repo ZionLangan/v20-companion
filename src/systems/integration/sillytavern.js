@@ -33,6 +33,8 @@ import { renderQuests } from '../rendering/quests.js';
 
 // Utils
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
+import { processWodRollCommands } from '../features/wodDice.js';
+import { updateDiceDisplay as updateDiceDisplayCore } from '../features/dice.js';
 
 /**
  * Commits the tracker data from the last assistant message to be used as source for next generation.
@@ -95,7 +97,13 @@ export async function onMessageReceived(data) {
         // The message should be in chat[chat.length - 1]
         const lastMessage = chat[chat.length - 1];
         if (lastMessage && !lastMessage.is_user) {
-            const responseText = lastMessage.mes;
+            let responseText = lastMessage.mes || '';
+            const processedRolls = processWodRollCommands(responseText);
+            if (processedRolls.modified) {
+                responseText = processedRolls.text;
+                lastMessage.mes = responseText;
+                updateDiceDisplayCore();
+            }
             // console.log('[RPG Companion] Parsing together mode response:', responseText);
 
             const parsedData = parseResponse(responseText);

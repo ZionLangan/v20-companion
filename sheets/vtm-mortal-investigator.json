@@ -1,0 +1,112 @@
+{
+  "id": "vtm-mortal-investigator",
+  "version": 1,
+  "meta": {
+    "name": "Rina Park",
+    "player": "Sample Seed",
+    "chronicle": "Glass City Nights",
+    "concept": "Night watch detective",
+    "supernaturalType": "Mortal",
+    "supernaturalSubtype": "Investigator",
+    "faction": { "type": "Affiliation", "value": "Glass City PD" },
+    "nature": "Architect",
+    "demeanor": "Traditionalist",
+    "age": 34,
+    "pronouns": "she/her",
+    "notes": [
+      "Knows something supernatural prowls the docks",
+      "Relies on procedure before improvisation"
+    ]
+  },
+  "traits": {
+    "attributes": {
+      "physical": { "strength": 2, "dexterity": 3, "stamina": 3 },
+      "social": { "charisma": 2, "manipulation": 3, "appearance": 2 },
+      "mental": { "perception": 3, "intelligence": 3, "wits": 3 }
+    },
+    "abilities": {
+      "talents": {
+        "alertness": 3,
+        "athletics": 2,
+        "awareness": 2,
+        "brawl": 2,
+        "empathy": 3,
+        "expression": 2,
+        "intimidation": 2,
+        "leadership": 2,
+        "streetwise": 2,
+        "subterfuge": 3
+      },
+      "skills": {
+        "animalKen": 1,
+        "crafts": 1,
+        "drive": 3,
+        "etiquette": 2,
+        "firearms": 3,
+        "larceny": 1,
+        "melee": 1,
+        "performance": 0,
+        "stealth": 2,
+        "survival": 1
+      },
+      "knowledges": {
+        "academics": 2,
+        "computer": 3,
+        "finance": 1,
+        "investigation": 4,
+        "law": 3,
+        "medicine": 1,
+        "occult": 1,
+        "politics": 2,
+        "science": 1,
+        "technology": 2
+      }
+    }
+  },
+  "advantages": {
+    "backgrounds": [
+      { "name": "Contacts", "rating": 3, "description": "Vice squad analysts and morgue staff" },
+      { "name": "Allies", "rating": 2, "description": "Trusted detectives" },
+      { "name": "Resources", "rating": 2, "description": "Police salary and overtime" }
+    ],
+    "virtues": { "conscience": 4, "selfControl": 3, "courage": 3 },
+    "morality": { "type": "Humanity", "rating": 7, "notes": "Adheres to ethical policing" },
+    "willpower": { "permanent": 4, "current": 4 },
+    "health": [
+      { "level": "Bruised", "state": "ok" },
+      { "level": "Hurt", "state": "ok" },
+      { "level": "Injured", "state": "ok" },
+      { "level": "Wounded", "state": "ok" },
+      { "level": "Mauled", "state": "ok" },
+      { "level": "Crippled", "state": "ok" },
+      { "level": "Incapacitated", "state": "ok" }
+    ],
+    "resourcePools": [
+      { "name": "Blood", "type": "blood", "capacity": 10, "current": 10, "notes": "Represents total blood volume; losing more than 5 risks incapacitation." }
+    ]
+  },
+  "powerSets": [],
+  "merits": [
+    { "name": "Danger Sense", "rating": 2, "description": "-2 difficulty to notice ambushes" },
+    { "name": "Eidetic Memory", "rating": 2, "description": "Recall dossiers without rolls" }
+  ],
+  "flaws": [
+    { "name": "Nightmares", "rating": 1, "description": "Lose 1 Willpower on failed Self-Control roll" }
+  ],
+  "equipment": {
+    "inventory": [
+      { "name": "Service pistol", "type": "weapon", "description": "9mm with two spare magazines" },
+      { "name": "Evidence kit", "type": "gear", "description": "Fingerprint dusting, sample bags" }
+    ],
+    "stored": [
+      { "name": "Case files", "type": "documents", "location": "Apartment", "description": "Cold cases" }
+    ],
+    "assets": [
+      { "name": "City rowhouse", "type": "property", "description": "Safe location" }
+    ]
+  },
+  "notes": [
+    "Often rolls Perception + Investigation for crime scenes",
+    "Understands ghoul rumors thanks to Occult 1"
+  ]
+}

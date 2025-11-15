@@ -282,6 +282,8 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
             instructions += `After updating the trackers, continue directly from where the last message in the chat history left off. Ensure the trackers you provide naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as fatigue affecting the protagonist's performance, low hygiene influencing their social interactions, environmental factors shaping the scene, a character's emotional state coloring their responses, and so on. Remember, all bracketed placeholders (e.g., [Location], [Mood Emoji]) MUST be replaced with actual content without the square brackets.\n\n`;
         }
 
+        instructions += `Need an authoritative World of Darkness dice result? Emit a single line like [[WOD-ROLL {"sheetId":"<character id>","pool":"Dexterity + Drive","difficulty":6,"modifier":0,"willpower":false}]] in your response. The extension will roll the pool, replace the tag with the summary, and log it for later prompts. Use the character's sheetId (or omit to use the currently active sheet) and keep JSON values strict.\n\n`;
+
         // Include attributes and dice roll only if there was a dice roll
         if (extensionSettings.lastDiceRoll) {
             const roll = extensionSettings.lastDiceRoll;
@@ -422,6 +424,8 @@ export function generateRPGPromptText() {
             promptText += `Last Present Characters:\nNone - this is the first update.\n`;
         }
     }
+
+    promptText += `\nIf you need an actual dice outcome, output a tag like [[WOD-ROLL {"pool":"Wits + Awareness","difficulty":7,"sheetId":"<character id>","willpower":false}]]. The client executes it, replaces the tag with the results, and the chat should reference those rolls moving forward.\n`;
 
     promptText += `</previous>\n`;
 

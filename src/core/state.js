@@ -150,11 +150,14 @@ export function createEmptyWodSheet(overrides = {}) {
  * @type {WodRuntimeState}
  */
 export const wodRuntimeState = {
+    baseSheets: new Map(),
     sheets: new Map(),
     sheetOrder: [],
     activeSheetId: null,
     diceLog: [],
-    diceDefaults: { ...DEFAULT_WOD_DICE_DEFAULTS }
+    diceDefaults: { ...DEFAULT_WOD_DICE_DEFAULTS },
+    chatOverrides: new Map(),
+    dirtySheets: new Set()
 };
 
 /**
@@ -362,11 +365,6 @@ export let isGenerating = false;
 export let isPlotProgression = false;
 
 /**
- * Temporary storage for pending dice roll (not saved until user clicks "Save Roll")
- */
-export let pendingDiceRoll = null;
-
-/**
  * Debug logs array for troubleshooting
  */
 export let debugLogs = [];
@@ -451,14 +449,6 @@ export function setIsPlotProgression(value) {
     isPlotProgression = value;
 }
 
-export function setPendingDiceRoll(roll) {
-    pendingDiceRoll = roll;
-}
-
-export function getPendingDiceRoll() {
-    return pendingDiceRoll;
-}
-
 export function setPanelContainer($element) {
     $panelContainer = $element;
 }
@@ -500,6 +490,37 @@ export function getWodSheet(sheetId) {
     return wodRuntimeState.sheets.get(sheetId) || null;
 }
 
+export function isWodSheetDirty(sheetId) {
+    if (!sheetId) {
+        return false;
+    }
+    return wodRuntimeState.dirtySheets?.has(sheetId) || false;
+}
+
+export function getDirtyWodSheetIds() {
+    if (!wodRuntimeState.dirtySheets) {
+        return [];
+    }
+    return Array.from(wodRuntimeState.dirtySheets);
+}
+
+export function markWodSheetDirty(sheetId) {
+    if (!sheetId) {
+        return;
+    }
+    if (!wodRuntimeState.dirtySheets) {
+        wodRuntimeState.dirtySheets = new Set();
+    }
+    wodRuntimeState.dirtySheets.add(sheetId);
+}
+
+export function markWodSheetClean(sheetId) {
+    if (!sheetId || !wodRuntimeState.dirtySheets) {
+        return;
+    }
+    wodRuntimeState.dirtySheets.delete(sheetId);
+}
+
 export function setActiveWodSheetId(sheetId) {
     if (sheetId && !wodRuntimeState.sheets.has(sheetId)) {
         return;
@@ -509,17 +530,29 @@ export function setActiveWodSheetId(sheetId) {
     extensionSettings.wod.activeSheetId = wodRuntimeState.activeSheetId;
 }
 
-export function setWodSheetRegistry(registry = {}) {
+export function setWodSheetRegistry(registry = {}, options = {}) {
     ensureWodSettings();
-    extensionSettings.wod.sheetRegistry = { ...registry };
-    wodRuntimeState.sheets = new Map();
+    const sanitizedRegistry = {};
     Object.entries(registry).forEach(([sheetId, sheetData]) => {
-        wodRuntimeState.sheets.set(sheetId, sheetData);
+        if (!sheetId || !sheetData || typeof sheetData !== 'object') {
+            return;
+        }
+        sanitizedRegistry[sheetId] = cloneSheetData(sheetData);
     });
-    const storedOrder = extensionSettings.wod.sheetOrder || [];
-    const filteredOrder = storedOrder.filter(id => wodRuntimeState.sheets.has(id));
-    wodRuntimeState.sheetOrder = filteredOrder.length > 0 ? filteredOrder : Array.from(wodRuntimeState.sheets.keys());
-    const candidateActive = extensionSettings.wod.activeSheetId || wodRuntimeState.sheetOrder[0] || null;
+    extensionSettings.wod.sheetRegistry = sanitizedRegistry;
+    wodRuntimeState.baseSheets = new Map();
+    wodRuntimeState.dirtySheets = new Set();
+    Object.entries(sanitizedRegistry).forEach(([sheetId, sheetData]) => {
+        wodRuntimeState.baseSheets.set(sheetId, cloneSheetData(sheetData));
+    });
+    reapplyWodOverrides();
+    const preferredOrder = Array.isArray(options.preferredOrder) && options.preferredOrder.length > 0
+        ? options.preferredOrder
+        : extensionSettings.wod.sheetOrder || [];
+    const filteredOrder = preferredOrder.filter(id => wodRuntimeState.sheets.has(id));
+    wodRuntimeState.sheetOrder = filteredOrder.length > 0 ? [...filteredOrder] : Array.from(wodRuntimeState.sheets.keys());
+    extensionSettings.wod.sheetOrder = [...wodRuntimeState.sheetOrder];
+    const candidateActive = options.activeSheetId || extensionSettings.wod.activeSheetId || wodRuntimeState.sheetOrder[0] || null;
     if (candidateActive && wodRuntimeState.sheets.has(candidateActive)) {
         wodRuntimeState.activeSheetId = candidateActive;
     } else {
@@ -532,24 +565,37 @@ export function upsertWodSheet(sheet) {
     if (!sheet || !sheet.id) {
         return;
     }
-    wodRuntimeState.sheets.set(sheet.id, sheet);
+    ensureWodSettings();
+    const safeSheet = cloneSheetData(sheet);
+    if (!wodRuntimeState.baseSheets) {
+        wodRuntimeState.baseSheets = new Map();
+    }
+    wodRuntimeState.baseSheets.set(sheet.id, cloneSheetData(safeSheet));
+    wodRuntimeState.sheets.set(sheet.id, cloneSheetData(safeSheet));
+    extensionSettings.wod.sheetRegistry[sheet.id] = cloneSheetData(safeSheet);
     if (!wodRuntimeState.sheetOrder.includes(sheet.id)) {
         wodRuntimeState.sheetOrder.push(sheet.id);
     }
-    ensureWodSettings();
-    extensionSettings.wod.sheetRegistry[sheet.id] = sheet;
     extensionSettings.wod.sheetOrder = [...wodRuntimeState.sheetOrder];
+    reapplyWodOverrides();
     if (!wodRuntimeState.activeSheetId) {
         setActiveWodSheetId(sheet.id);
     }
 }
 
 export function removeWodSheet(sheetId) {
+    if (!sheetId) {
+        return;
+    }
     wodRuntimeState.sheets.delete(sheetId);
+    if (wodRuntimeState.baseSheets) {
+        wodRuntimeState.baseSheets.delete(sheetId);
+    }
     wodRuntimeState.sheetOrder = wodRuntimeState.sheetOrder.filter(id => id !== sheetId);
     ensureWodSettings();
     delete extensionSettings.wod.sheetRegistry[sheetId];
     extensionSettings.wod.sheetOrder = [...wodRuntimeState.sheetOrder];
+    reapplyWodOverrides();
     if (wodRuntimeState.activeSheetId === sheetId) {
         setActiveWodSheetId(wodRuntimeState.sheetOrder[0] || null);
     }
@@ -577,6 +623,105 @@ export function setWodDiceDefaults(defaults = {}) {
         ...defaults
     };
     syncWodDiceDefaultsFromSettings();
+}
+
+export function setWodChatOverrides(overrides = {}) {
+    wodRuntimeState.chatOverrides = new Map();
+    wodRuntimeState.dirtySheets = new Set();
+    if (overrides && typeof overrides === 'object') {
+        Object.entries(overrides).forEach(([sheetId, payload]) => {
+            if (!payload || !payload.sheet) {
+                return;
+            }
+            wodRuntimeState.chatOverrides.set(sheetId, {
+                updatedAt: payload.updatedAt || Date.now(),
+                sheet: cloneSheetData(payload.sheet)
+            });
+            markWodSheetDirty(sheetId);
+        });
+    }
+    reapplyWodOverrides();
+}
+
+export function clearWodChatOverrides() {
+    wodRuntimeState.chatOverrides = new Map();
+    wodRuntimeState.dirtySheets = new Set();
+    reapplyWodOverrides();
+}
+
+export function recordWodChatOverride(sheet, updatedAt = Date.now()) {
+    if (!sheet || !sheet.id) {
+        return;
+    }
+    if (!wodRuntimeState.chatOverrides) {
+        wodRuntimeState.chatOverrides = new Map();
+    }
+    wodRuntimeState.chatOverrides.set(sheet.id, {
+        updatedAt,
+        sheet: cloneSheetData(sheet)
+    });
+    markWodSheetDirty(sheet.id);
+    reapplyWodOverrides();
+}
+
+export function removeWodChatOverride(sheetId) {
+    if (!sheetId || !wodRuntimeState.chatOverrides) {
+        return;
+    }
+    if (!wodRuntimeState.chatOverrides.has(sheetId)) {
+        return;
+    }
+    wodRuntimeState.chatOverrides.delete(sheetId);
+    markWodSheetClean(sheetId);
+    reapplyWodOverrides();
+}
+
+export function serializeWodChatOverrides() {
+    const payload = {};
+    if (!wodRuntimeState.chatOverrides) {
+        return payload;
+    }
+    wodRuntimeState.chatOverrides.forEach((entry, sheetId) => {
+        if (!entry || !entry.sheet) {
+            return;
+        }
+        payload[sheetId] = {
+            updatedAt: entry.updatedAt || Date.now(),
+            sheet: cloneSheetData(entry.sheet)
+        };
+    });
+    return payload;
+}
+
+function cloneSheetData(sheet) {
+    return JSON.parse(JSON.stringify(sheet));
+}
+
+function refreshWodSheetsFromBase() {
+    wodRuntimeState.sheets = new Map();
+    if (!wodRuntimeState.baseSheets) {
+        wodRuntimeState.baseSheets = new Map();
+        return;
+    }
+    wodRuntimeState.baseSheets.forEach((sheet, sheetId) => {
+        wodRuntimeState.sheets.set(sheetId, cloneSheetData(sheet));
+    });
+}
+
+function reapplyWodOverrides() {
+    refreshWodSheetsFromBase();
+    if (!wodRuntimeState.chatOverrides || wodRuntimeState.chatOverrides.size === 0) {
+        return;
+    }
+    wodRuntimeState.chatOverrides.forEach((entry, sheetId) => {
+        if (!entry || !entry.sheet) {
+            return;
+        }
+        wodRuntimeState.sheets.set(sheetId, cloneSheetData(entry.sheet));
+        if (!wodRuntimeState.sheetOrder.includes(sheetId)) {
+            wodRuntimeState.sheetOrder.push(sheetId);
+        }
+    });
 }
 
 function ensureWodSettings() {

@@ -4,7 +4,7 @@
  */
 
 /**
- * Dot-based trait value (0–5 by default, but may exceed for elders/epics)
+ * Dot-based trait value (0-5 by default, but may exceed for elders/epics)
  * @typedef {number} WodDotValue
  */
 
@@ -66,6 +66,11 @@
  * @typedef {Object} WodHealthLevel
  * @property {string} level // e.g., "Bruised", "Hurt"
  * @property {"ok"|"bashing"|"lethal"|"aggravated"} state
+ */
+
+/**
+ * Ordered health track for a sheet
+ * @typedef {WodHealthLevel[]} WodHealthTrack
  */
 
 /**

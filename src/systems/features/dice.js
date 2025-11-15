@@ -1,113 +1,165 @@
 /**
  * Dice System Module
- * Handles dice rolling logic, display updates, and quick reply integration
+ * Handles WoD dice rolling logic, display updates, and LLM-friendly logging
  */
 
 import {
     extensionSettings,
-    pendingDiceRoll,
-    setPendingDiceRoll
+    wodRuntimeState,
+    getActiveWodSheet,
+    getWodSheet,
+    setActiveWodSheetId,
+    clearWodDiceLog
 } from '../../core/state.js';
-import { saveSettings } from '../../core/persistence.js';
+import { saveChatData, saveSettings } from '../../core/persistence.js';
+import {
+    resolveDicePool,
+    buildPoolParts,
+    getAttributeOptionsForSheet,
+    getAbilityOptionsForSheet,
+    logDiceResult,
+    formatDiceSummary
+} from './wodDice.js';
 
-/**
- * Rolls the dice and displays result.
- * Works with the DiceModal class for UI updates.
- * @param {DiceModal} diceModal - The DiceModal instance
- */
+function wait(delay = 400) {
+    return new Promise(resolve => setTimeout(resolve, delay));
+}
+
+function getSelectedSheetId() {
+    const sheetId = String($('#wod-dice-sheet').val() || '');
+    return sheetId || wodRuntimeState.activeSheetId || null;
+}
+
+function getSheetOptions() {
+    const options = [];
+    wodRuntimeState.sheetOrder.forEach(sheetId => {
+        const sheet = getWodSheet(sheetId);
+        if (!sheet) return;
+        options.push({
+            id: sheet.id,
+            label: sheet.meta?.name || sheet.id
+        });
+    });
+    return options;
+}
+
+function populateSelectOptions($select, options, placeholder) {
+    $select.empty();
+    if (placeholder) {
+        $select.append(`<option value="">${placeholder}</option>`);
+    }
+    options.forEach(option => {
+        $select.append(`<option value="${option.id}">${option.label}</option>`);
+    });
+}
+
+export function refreshDiceFormOptions() {
+    const $sheetSelect = $('#wod-dice-sheet');
+    if ($sheetSelect.length === 0) {
+        return;
+    }
+
+    const sheetId = getSelectedSheetId();
+    const sheetOptions = getSheetOptions();
+    populateSelectOptions($sheetSelect, sheetOptions, 'Select character');
+    if (sheetId) {
+        $sheetSelect.val(sheetId);
+    }
+
+    const sheet = getWodSheet(sheetId) || getActiveWodSheet();
+    if (!sheet) {
+        $('#wod-dice-attribute').empty();
+        $('#wod-dice-ability').empty();
+        return;
+    }
+
+    const attributeOptions = getAttributeOptionsForSheet(sheet);
+    const abilityOptions = getAbilityOptionsForSheet(sheet);
+    populateSelectOptions($('#wod-dice-attribute'), attributeOptions, 'Choose Attribute');
+    populateSelectOptions($('#wod-dice-ability'), abilityOptions, 'Choose Ability');
+}
+
 export async function rollDice(diceModal) {
     if (!diceModal) return;
 
-    const count = parseInt(String($('#rpg-dice-count').val())) || 1;
-    const sides = parseInt(String($('#rpg-dice-sides').val())) || 20;
+    const sheetId = getSelectedSheetId();
+    const sheet = getWodSheet(sheetId) || getActiveWodSheet();
+    if (!sheet) {
+        toastr.error('No WoD character sheet loaded. Import or select one before rolling.');
+        return;
+    }
 
-    // Start rolling animation
+    if (sheetId && sheetId !== wodRuntimeState.activeSheetId) {
+        setActiveWodSheetId(sheetId);
+    }
+
+    const attributeKey = String($('#wod-dice-attribute').val() || '');
+    const abilityKey = String($('#wod-dice-ability').val() || '');
+    const extraDice = Number($('#wod-dice-extra').val() || 0);
+    const modifier = Number($('#wod-dice-modifier').val() || 0);
+    const difficulty = parseInt(String($('#wod-dice-difficulty').val()), 10) || wodRuntimeState.diceDefaults.difficulty || 6;
+    const explode = String($('#wod-dice-explode').val() || wodRuntimeState.diceDefaults.explode || '10-again');
+    const specialty = $('#wod-dice-specialty').prop('checked');
+    const willpower = $('#wod-dice-willpower').prop('checked');
+    const rerollsCount = parseInt(String($('#wod-dice-rerolls').val()), 10) || 0;
+    const rerollStages = rerollsCount > 0 ? [{ count: rerollsCount, label: 'Reroll' }] : [];
+    const notes = String($('#wod-dice-notes').val() || '').trim() || null;
+    const labelInput = String($('#wod-dice-label').val() || '').trim();
+
+    const parts = buildPoolParts(sheet, attributeKey, abilityKey, extraDice, modifier);
+    if (parts.length === 0) {
+        toastr.warning('Select at least one trait or enter extra dice to form a pool.');
+        return;
+    }
+
+    const poolLabel = labelInput || parts.map(part => `${part.label} (${part.value})`).join(' + ');
+
     diceModal.startRolling();
+    await wait(850);
 
-    // Wait for animation (simulate rolling)
-    await new Promise(resolve => setTimeout(resolve, 1200));
-
-    // Execute /roll command
-    const rollCommand = `/roll ${count}d${sides}`;
-    const rollResult = await executeRollCommand(rollCommand);
-
-    // Parse result
-    const total = rollResult.total || 0;
-    const rolls = rollResult.rolls || [];
-
-    // Store result temporarily (not saved until "Save Roll" is clicked)
-    setPendingDiceRoll({
-        formula: `${count}d${sides}`,
-        total: total,
-        rolls: rolls,
-        timestamp: Date.now()
+    const result = resolveDicePool({
+        sheetId: sheet.id,
+        sheetName: sheet.meta?.name,
+        parts,
+        difficulty,
+        explode,
+        specialtyApplies: specialty,
+        spendWillpower: willpower,
+        rerollStages,
+        poolLabel,
+        notes,
+        requestedBy: 'user'
     });
 
-    // Show result
-    diceModal.showResult(total, rolls);
-
-    // Don't update sidebar display yet - only update when user clicks "Save Roll"
-}
-
-/**
- * Executes a /roll command and returns the result.
- * @param {string} command - The roll command (e.g., "/roll 2d20")
- * @returns {Promise<{total: number, rolls: Array<number>}>} The roll result
- */
-export async function executeRollCommand(command) {
-    try {
-        // Parse the dice notation (e.g., "2d20")
-        const match = command.match(/(\d+)d(\d+)/);
-        if (!match) {
-            return { total: 0, rolls: [] };
-        }
-
-        const count = parseInt(match[1]);
-        const sides = parseInt(match[2]);
-        const rolls = [];
-        let total = 0;
-
-        for (let i = 0; i < count; i++) {
-            const roll = Math.floor(Math.random() * sides) + 1;
-            rolls.push(roll);
-            total += roll;
-        }
-
-        return { total, rolls };
-    } catch (error) {
-        console.error('[RPG Companion] Error rolling dice:', error);
-        return { total: 0, rolls: [] };
-    }
-}
-
-/**
- * Updates the dice display in the sidebar.
- */
-export function updateDiceDisplay() {
-    const lastRoll = extensionSettings.lastDiceRoll;
-    if (lastRoll) {
-        $('#rpg-last-roll-text').text(`Last Roll (${lastRoll.formula}): ${lastRoll.total}`);
-    } else {
-        $('#rpg-last-roll-text').text('Last Roll: None');
-    }
-}
-
-/**
- * Clears the last dice roll.
- */
-export function clearDiceRoll() {
-    extensionSettings.lastDiceRoll = null;
-    saveSettings();
+    logDiceResult(result);
+    diceModal.showResult(result);
     updateDiceDisplay();
 }
 
-/**
- * Adds the Roll Dice quick reply button.
- */
+export function updateDiceDisplay() {
+    const lastEntry = wodRuntimeState.diceLog[wodRuntimeState.diceLog.length - 1];
+    if (lastEntry) {
+        $('#rpg-last-roll-text').text(formatDiceSummary(lastEntry));
+    } else {
+        $('#rpg-last-roll-text').text('No Vampire: the Masquerade rolls logged yet.');
+    }
+}
+
+export function clearDiceRoll() {
+    clearWodDiceLog();
+    extensionSettings.lastDiceRoll = null;
+    saveSettings();
+    saveChatData();
+    updateDiceDisplay();
+}
+
 export function addDiceQuickReply() {
-    // Create quick reply button if Quick Replies exist
-    if (window.quickReplyApi) {
-        // Quick Reply API integration would go here
-        // For now, the dice display in the sidebar serves as the button
+    if (window.quickReplyApi && typeof window.quickReplyApi.registerButton === 'function') {
+        window.quickReplyApi.registerButton({
+            id: 'wod-dice',
+            label: 'Roll WoD Dice',
+            icon: 'fa-dice-d20',
+            onClick: () => $('#rpg-dice-display').trigger('click')
+        });
     }
 }

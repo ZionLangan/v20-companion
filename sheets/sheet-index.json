@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "sheets": [
+    {
+      "id": "vtm-brujah-valeria",
+      "file": "vtm-brujah-valeria.json",
+      "label": "Valeria Orlov",
+      "type": "vampire",
+      "chronicle": "Glass City Nights",
+      "concept": "Brujah enforcer and union organizer"
+    },
+    {
+      "id": "vtm-mortal-investigator",
+      "file": "vtm-mortal-investigator.json",
+      "label": "Rina Park",
+      "type": "mortal",
+      "chronicle": "Glass City Nights",
+      "concept": "Night watch detective"
+    },
+    {
+      "id": "vtm-ghoul-fixer",
+      "file": "vtm-ghoul-fixer.json",
+      "label": "Mateo Serrano",
+      "type": "ghoul",
+      "chronicle": "Glass City Nights",
+      "concept": "Ventrue ghoul fixer"
+    }
+  ]
+}

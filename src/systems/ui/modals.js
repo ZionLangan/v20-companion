@@ -9,9 +9,7 @@ import {
     lastGeneratedData,
     committedTrackerData,
     $infoBoxContainer,
-    $thoughtsContainer,
-    setPendingDiceRoll,
-    getPendingDiceRoll
+    $thoughtsContainer
 } from '../../core/state.js';
 import { saveSettings, saveChatData } from '../../core/persistence.js';
 import { renderUserStats } from '../rendering/userStats.js';
@@ -21,7 +19,8 @@ import {
     rollDice as rollDiceCore,
     clearDiceRoll as clearDiceRollCore,
     updateDiceDisplay as updateDiceDisplayCore,
-    addDiceQuickReply as addDiceQuickReplyCore
+    addDiceQuickReply as addDiceQuickReplyCore,
+    refreshDiceFormOptions
 } from '../features/dice.js';
 
 /**
@@ -46,6 +45,8 @@ export class DiceModal {
      */
     open() {
         if (this.isAnimating) return;
+
+        refreshDiceFormOptions();
 
         // Apply theme
         const theme = extensionSettings.theme;
@@ -81,9 +82,6 @@ export class DiceModal {
         setTimeout(() => {
             this.modal.classList.remove('is-closing');
             this.isAnimating = false;
-
-            // Clear pending roll
-            setPendingDiceRoll(null);
         }, 200);
     }
 
@@ -99,11 +97,11 @@ export class DiceModal {
      * @param {number} total - The total roll value
      * @param {Array<number>} rolls - Individual roll values
      */
-    showResult(total, rolls) {
+    showResult(result) {
         this._setState('SHOWING_RESULT');
 
-        // Update result values
-        this.resultValue.textContent = total;
+        const label = `${result.successes} success${result.successes === 1 ? '' : 'es'} (${result.outcome})`;
+        this.resultValue.textContent = label;
         this.resultValue.classList.add('is-animating');
 
         // Remove animation class after it completes
@@ -111,12 +109,17 @@ export class DiceModal {
             this.resultValue.classList.remove('is-animating');
         }, 500);
 
-        // Show details if multiple rolls
-        if (rolls && rolls.length > 1) {
-            this.resultDetails.textContent = `Rolls: ${rolls.join(', ')}`;
-        } else {
-            this.resultDetails.textContent = '';
+        const detailLines = [];
+        if (result.poolLabel) {
+            detailLines.push(`Pool: ${result.poolLabel}`);
         }
+        detailLines.push(`Difficulty ${result.difficulty}, ${result.explode}`);
+        detailLines.push(`Dice: [${result.rolls.join(', ')}]`);
+        if (result.notes) {
+            detailLines.push(`Notes: ${result.notes}`);
+        }
+
+        this.resultDetails.textContent = detailLines.join(' • ');
     }
 
     /**
@@ -293,24 +296,8 @@ export function setupDiceRoller() {
         await rollDiceCore(diceModal);
     });
 
-    // Save roll button (closes popup and saves the roll)
-    $('#rpg-dice-save-btn').on('click', function() {
-        // Save the pending roll
-        const roll = getPendingDiceRoll();
-        if (roll) {
-            extensionSettings.lastDiceRoll = roll;
-            saveSettings();
-            updateDiceDisplayCore();
-            setPendingDiceRoll(null);
-        }
-        closeDicePopup();
-    });
-
-    // Reset on Enter key
-    $('#rpg-dice-count, #rpg-dice-sides').on('keypress', function(e) {
-        if (e.which === 13) {
-            rollDiceCore(diceModal);
-        }
+    $('#wod-dice-sheet').on('change', function() {
+        refreshDiceFormOptions();
     });
 
     // Clear dice roll button

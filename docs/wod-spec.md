@@ -6,11 +6,11 @@ This document is the source-of-truth for Step 1 of the AGENTS plan. Its job is t
 
 ## 1. Scope, Goals, and Guardrails
 
-- **Mission recap** – Replace the generic RPG companion with a WoD-focused experience that models Attributes, Abilities, Advantages, supernatural powers, and resource tracks for multiple characters simultaneously.
-- **LLM-first** – Anything rendered in the UI must serialize into the prompt builder exactly. Fields are integers, arrays, or enums; nothing is free-form markdown blobs.
-- **File-backed sheets** – Canonical sheets live in `sheets/*.json`. The UI loads them read-only, then layers chat-specific overrides stored through SillyTavern persistence. Manual JSON edits must sync back via explicit user actions (export + re-import/refresh).
-- **State architecture** – Continue to centralize runtime state in `src/core/state.js`, use `src/core/persistence.js` for SillyTavern APIs, and surface UI via `template.html` + `src/systems/**`.
-- **Dice transparency** – Every roll logs the pool math (trait sources, difficulty, 10-again setting, willpower, rerolls, botches) for both UI and injected prompts.
+- **Mission recap** - Replace the generic RPG companion with a WoD-focused experience that models Attributes, Abilities, Advantages, supernatural powers, and resource tracks for multiple characters simultaneously.
+- **LLM-first** - Anything rendered in the UI must serialize into the prompt builder exactly. Fields are integers, arrays, or enums; nothing is free-form markdown blobs.
+- **File-backed sheets** - Canonical sheets live in `sheets/*.json`. The UI loads them read-only, then layers chat-specific overrides stored through SillyTavern persistence. Manual JSON edits must sync back via explicit user actions (export + re-import/refresh).
+- **State architecture** - Continue to centralize runtime state in `src/core/state.js`, use `src/core/persistence.js` for SillyTavern APIs, and surface UI via `template.html` + `src/systems/**`.
+- **Dice transparency** - Every roll logs the pool math (trait sources, difficulty, 10-again setting, willpower, rerolls, botches) for both UI and injected prompts.
 
 ---
 
@@ -18,23 +18,24 @@ This document is the source-of-truth for Step 1 of the AGENTS plan. Its job is t
 
 Each sheet is a discrete JSON document that the UI can load, display, and edit. Sheets share the following structure:
 
-1. **Identity metadata** – text fields that keep the sheet tied to fictional context.
-2. **Traits** – Attributes (Physical, Social, Mental) and Abilities (Talents, Skills, Knowledges) rated 0–5 dots by default.
-3. **Advantages & tracks** – Backgrounds, Virtues, Morality/Path, Willpower, Health, Blood Pool (or equivalent for other game lines).
-4. **Supernatural powers** – Disciplines, Rituals, Gifts, or custom pools with per-power ratings/descriptions.
-5. **Equipment & notes** – structured arrays for gear, merits/flaws, or free-form notes.
+1. **Identity metadata** - text fields that keep the sheet tied to fictional context.
+2. **Traits** - Attributes (Physical, Social, Mental) and Abilities (Talents, Skills, Knowledges) rated 0-5 dots by default.
+3. **Advantages & tracks** - Backgrounds, Virtues, Morality/Path, Willpower, Health, Blood Pool (or equivalent for other game lines).
+4. **Supernatural powers** - Disciplines, Rituals, Gifts, or custom pools with per-power ratings/descriptions.
+5. **Equipment & notes** - structured arrays for gear, merits/flaws, or free-form notes.
 
 ### 2.1 Identity & Narrative Metadata
 
 - `name`, `player`, `chronicle`, `concept`
 - `faction` (Clan, Tribe, Tradition, etc.)
+- `supernaturalType` / `supernaturalSubtype` (optional) - e.g., `Kindred` / `Brujah`, `Ghoul` / `Ventrue Retainer`, `Mortal` / `Civilian`.
 - `nature`, `demeanor` (or equivalent personality axes)
 - `age`, `apparentAge`, `pronouns`
-- `notes` – short descriptive strings that help the LLM understand context
+- `notes` - short descriptive strings that help the LLM understand context
 
 ### 2.2 Attributes (Innate Traits)
 
-| Category | Traits (0–5 default) | Notes |
+| Category | Traits (0-5 default) | Notes |
 | --- | --- | --- |
 | **Physical** | Strength, Dexterity, Stamina | Appearance is the only Attribute that can be 0 by default |
 | **Social** | Charisma, Manipulation, Appearance | |
@@ -42,31 +43,32 @@ Each sheet is a discrete JSON document that the UI can load, display, and edit. 
 
 ### 2.3 Abilities (Learned Traits)
 
-- **Talents** – Alertness, Athletics, Awareness, Brawl, Empathy, Expression, Intimidation, Leadership, Streetwise, Subterfuge.
-- **Skills** – Animal Ken, Crafts, Drive, Etiquette, Firearms, Larceny, Melee, Performance, Stealth, Survival.
-- **Knowledges** – Academics, Computer, Finance, Investigation, Law, Medicine, Occult, Politics, Science, Technology.
+- **Talents** - Alertness, Athletics, Awareness, Brawl, Empathy, Expression, Intimidation, Leadership, Streetwise, Subterfuge.
+- **Skills** - Animal Ken, Crafts, Drive, Etiquette, Firearms, Larceny, Melee, Performance, Stealth, Survival.
+- **Knowledges** - Academics, Computer, Finance, Investigation, Law, Medicine, Occult, Politics, Science, Technology.
 
-> The list is configurable; these v20 defaults seed new sheets. All Abilities are integers 0–5. Talents roll without penalty at 0 dots, Skills add +1 difficulty when untrained, Knowledges cannot be rolled untrained (difficulty automatically fails unless Storyteller allows otherwise).
+> The list is configurable; these v20 defaults seed new sheets. All Abilities are integers 0-5. Talents roll without penalty at 0 dots, Skills add +1 difficulty when untrained, Knowledges cannot be rolled untrained (difficulty automatically fails unless Storyteller allows otherwise).
 
 ### 2.4 Advantages and Resource Tracks
 
-- **Backgrounds** – array of named entries with dot ratings (0–5). Examples: Allies, Contacts, Resources, Totem, Node.
-- **Virtues** – Conscience/Conviction, Self-Control/Instinct, Courage (0–5). Needed to derive Morality/Path and Willpower.
-- **Morality/Path** – Humanity, Path of Night, Clarity, etc. Store as `{ type, rating }` with explicit ranges (typically 0–10).
-- **Willpower** – `{ permanent, current }` where permanent is 0–10 and current cannot exceed permanent.
-- **Health Track** – ordered list of `{ level, state }` entries with states (`ok`, `bashing`, `lethal`, `aggravated`). Default v20 order: Bruised → Incapacitated.
+- **Backgrounds** - array of named entries with dot ratings (0-5). Examples: Allies, Contacts, Resources, Totem, Node.
+- **Virtues** - Conscience/Conviction, Self-Control/Instinct, Courage (0-5). Needed to derive Morality/Path and Willpower.
+- **Morality/Path** - Humanity, Path of Night, Clarity, etc. Store as `{ type, rating }` with explicit ranges (typically 0-10).
+- **Willpower** - `{ permanent, current }` where permanent is 0-10 and current cannot exceed permanent.
+- **Health Track** - ordered list of `{ level, state }` entries with states (`ok`, `bashing`, `lethal`, `aggravated`). Default v20 order: Bruised -> Incapacitated.
 - **Resource Pools** – array of `{ name, type, capacity, current, notes }` describing any spendable meter (Blood, Rage, Quintessence, Glamour, Mana, Vitae, Faith, etc.). The schema never assumes which pools exist; each sheet declares its own.
+- **Mortal blood tracking** – every true human needs a `"Blood"` resource pool with `capacity` 10 and `current` between 0–10 so draining scenes and ghoul feeding can be tracked mechanically.
 
 ### 2.5 Powers & Edge Systems
 
 WoD games offer dozens of supernatural subsystems, but they all boil down to structured talents with ratings and learned sub-abilities. Model them with a single schema:
 
-- `powerSets` – array of objects:
-  - `name` – e.g., “Celerity”, “True Faith”, “Hedge Sorcery”
-  - `category` – high-level tag (`discipline`, `gift`, `ritual`, `edge`, `sorcery`, `custom`)
-  - `rating` – dots or levels in the parent power (0–10 depending on system)
-  - `powers` – array of sub-abilities, each `{ name, rating, description, cost?, reference? }`
-  - `tags` – optional metadata (clan, tradition, tribe, etc.)
+- `powerSets` - array of objects:
+  - `name` - e.g., "Celerity", "True Faith", "Hedge Sorcery"
+  - `category` - high-level tag (`discipline`, `gift`, `ritual`, `edge`, `sorcery`, `custom`)
+  - `rating` - dots or levels in the parent power (0-10 depending on system)
+  - `powers` - array of sub-abilities, each `{ name, rating, description, cost?, reference? }`
+  - `tags` - optional metadata (clan, tradition, tribe, etc.)
 - This format supports anything from Disciplines to Numina, Hedge Magic paths, or even mortal edges by simply varying `category` and `tags`.
 
 Merits/Flaws remain optional arrays with names, ratings, and descriptions.
@@ -75,9 +77,9 @@ Merits/Flaws remain optional arrays with names, ratings, and descriptions.
 
 Keep gear organized so both the UI and LLM know what is on-hand vs stashed:
 
-- `equipment.inventory` – array of items actively carried/worn.
-- `equipment.stored` – array of items in havens, cars, chantries, arsenals, etc. Include a `location` field per item.
-- `equipment.assets` – array of major possessions (vehicles, businesses, safehouses, cults). These generally grant narrative leverage rather than being wielded directly.
+- `equipment.inventory` - array of items actively carried/worn.
+- `equipment.stored` - array of items in havens, cars, chantries, arsenals, etc. Include a `location` field per item.
+- `equipment.assets` - array of major possessions (vehicles, businesses, safehouses, cults). These generally grant narrative leverage rather than being wielded directly.
 
 Each item entry follows `{ name, type, location?, description, tags? }`.
 
@@ -187,7 +189,7 @@ The extension should treat every sheet as a JSON object shaped like the example 
 }
 ```
 
-> **Implementation tip** – Keep keys predictable (camelCase) and prefer explicit objects over arrays for dot ratings. This makes it trivial for the parser to look up `traits.abilities.skills.drive` and keeps prompt diffs small.
+> **Implementation tip** - Keep keys predictable (camelCase) and prefer explicit objects over arrays for dot ratings. This makes it trivial for the parser to look up `traits.abilities.skills.drive` and keeps prompt diffs small.
 
 ---
 
@@ -197,8 +199,8 @@ Runtime state must be capable of holding:
 
 1. **Registry of sheets** (global + chat overrides)
 2. **Active sheet pointer** (the sheet currently shown/edited)
-3. **Dice log** – chronological list of WoD roll summaries
-4. **Dirty flags** – tracks which sheets diverged from on-disk JSON
+3. **Dice log** - chronological list of WoD roll summaries
+4. **Dirty flags** - tracks which sheets diverged from on-disk JSON
 
 Proposed `state.js` shape:
 
@@ -216,10 +218,10 @@ export const extensionState = {
 };
 ```
 
-- **Global load** – On init, fetch bundled JSON from `/extensions/v20-companion/sheets/*.json`, normalize them, and store in `sheets`.
-- **Chat overrides** – `chat_metadata.rpg_companion_v20` stores per-sheet diffs (only fields changed). On load, merge `baseSheet` with overrides (deep merge, overrides win). Track `updatedAt` timestamps per override to detect conflicts.
-- **Saving** – When the UI edits a trait, mark the sheet dirty for the current chat and call `saveChatData`. Offer a “Sync to File” action that surfaces the merged JSON for manual copy/paste back into the filesystem.
-- **Selection** – The UI should expose a dropdown or tab list sourced from `sheetOrder`. Switching sheets updates `activeSheetId` and re-renders traits/dice options.
+- **Global load** - On init, fetch bundled JSON from `/extensions/v20-companion/sheets/*.json`, normalize them, and store in `sheets`.
+- **Chat overrides** - `chat_metadata.rpg_companion_v20` stores per-sheet diffs (only fields changed). On load, merge `baseSheet` with overrides (deep merge, overrides win). Track `updatedAt` timestamps per override to detect conflicts.
+- **Saving** - When the UI edits a trait, mark the sheet dirty for the current chat and call `saveChatData`. Offer a "Sync to File" action that surfaces the merged JSON for manual copy/paste back into the filesystem.
+- **Selection** - The UI should expose a dropdown or tab list sourced from `sheetOrder`. Switching sheets updates `activeSheetId` and re-renders traits/dice options.
 
 ---
 
@@ -227,13 +229,13 @@ export const extensionState = {
 
 ### 5.1 Core Dice Rules
 
-1. **Pool creation** – Most rolls are Attribute + Ability + modifiers. Some use Backgrounds, Willpower, or power ratings instead. Pool size cannot drop below 1 die unless explicitly stated.
-2. **Difficulty** – Default is 6. Range: 3 (easy) to 10 (nearly impossible). Some environmental modifiers adjust difficulty instead of dice.
-3. **Successes** – Each die ≥ difficulty counts as one success. Tens may grant rerolls depending on the 10-again setting.
-4. **Botches** – If a roll yields zero successes and at least one die shows 1, the result is a botch.
-5. **Willpower** – Spending 1 current Willpower adds one automatic success (does not roll an extra die) and records the expenditure.
-6. **Specialties** – When rolling 7+ dice or when a specialty applies, 10s explode per the selected rule (10-again by default, optional 9-/8-again).
-7. **Rerolls** – The UI may allow limited rerolls based on powers or Storyteller calls; rerolls include the same difficulty and 10-again rule and must be logged separately.
+1. **Pool creation** - Most rolls are Attribute + Ability + modifiers. Some use Backgrounds, Willpower, or power ratings instead. Pool size cannot drop below 1 die unless explicitly stated.
+2. **Difficulty** - Default is 6. Range: 3 (easy) to 10 (nearly impossible). Some environmental modifiers adjust difficulty instead of dice.
+3. **Successes** - Each die >= difficulty counts as one success. Tens may grant rerolls depending on the 10-again setting.
+4. **Botches** - If a roll yields zero successes and at least one die shows 1, the result is a botch.
+5. **Willpower** - Spending 1 current Willpower adds one automatic success (does not roll an extra die) and records the expenditure.
+6. **Specialties** - When rolling 7+ dice or when a specialty applies, 10s explode per the selected rule (10-again by default, optional 9-/8-again).
+7. **Rerolls** - The UI may allow limited rerolls based on powers or Storyteller calls; rerolls include the same difficulty and 10-again rule and must be logged separately.
 
 ### 5.2 Dice Engine Responsibilities
 
@@ -316,25 +318,36 @@ export function resolveDicePool(config) {
 }
 ```
 
+### 5.4 LLM Roll Tags
+
+- The assistant can request an authoritative roll mid-response using the inline command `[[WOD-ROLL {...}]]`.
+- Payloads are strict JSON objects with the following keys:
+  - `sheetId` (optional): defaults to the active sheet when omitted.
+  - `pool`: Attribute/Ability string split by `+` (`"Dexterity + Brawl + Specialty"`). Tokens are matched case-insensitively against sheet traits; unknown tokens can be numbers for flat bonuses.
+  - `difficulty` (default 6), `explode` (`"10-again"`, `"9-again"`, `"8-again"`, `"no-again"`), `modifier`, `dice` (manual pool), `rerolls`, `willpower`, and `specialty`.
+  - `label`/`notes`: optional human-readable context.
+- The client replaces the tag with a formatted summary (pool label, dice list, successes, outcome) and stores the resulting entry in `wodRuntimeState.diceLog` plus `chat_metadata.rpg_companion_v20`.
+- Example: `[[WOD-ROLL {"sheetId":"vtm-brujah-valeria","pool":"Dexterity + Brawl","difficulty":6,"modifier":1,"willpower":false}]]`
+
 ---
 
 ## 6. Serialization & Prompt Expectations
 
-- **Tracker instructions** – Prompts must describe each active character with consistent block formatting: one block for sheet data, one for resource tracks, one for dice log summary.
-- **LLM updates** – Parser expects JSON-like fenced blocks in replies with the same structure as stored sheets (only changed fields required). Values stay within defined ranges (e.g., dots 0–5, blood pool 0–capacity).
-- **Dice references** – When the LLM triggers a roll, it must cite the dice log entry ID or recreated label so the client can verify.
+- **Tracker instructions** - Prompts must describe each active character with consistent block formatting: one block for sheet data, one for resource tracks, one for dice log summary.
+- **LLM updates** - Parser expects JSON-like fenced blocks in replies with the same structure as stored sheets (only changed fields required). Values stay within defined ranges (e.g., dots 0-5, blood pool 0-capacity).
+- **Dice references** - When the LLM triggers a roll, it must cite the dice log entry ID or recreated label so the client can verify.
 
 ---
 
-## 7. Next Steps (Step 2 Readiness)
+## 7. Next Steps (Step 5: Sheet UI & Editing Experience)
 
-1. **Implement types** – Create JSDoc typedefs (or TS-style comments) for `WodCharacterSheet`, `TraitSet`, `ResourcePools`, and `DicePoolConfig` mirroring this spec.
-2. **Replace legacy trackers** – Remove `userStats`, `classicStats`, etc., in `src/core/state.js` and load sheets based on the JSON structure defined here.
-3. **Bootstrap sample sheets** – Populate `sheets/` with at least one canonical sheet (e.g., Brujah sample above) to validate the loader.
-4. **Update README** – Document where sheets live, how to edit them, and how to refresh SillyTavern to pick up changes.
+1. **Sidebar overhaul** - Replace the remaining User Stats/Info Box panels with WoD-focused layouts (Attributes/Abilities, Advantages, Disciplines, resource tracks) sourced from the active sheet.
+2. **Multi-character editing** - Provide a selector/tabs for switching sheets plus inline editors for dots/boxes with validation (0-5 dots, health track states, resource capacities).
+3. **Dirty tracking & persistence** - Flag edited sheets, push changes into `chat_metadata.rpg_companion_v20`, and surface a “Sync to File” action that dumps the merged JSON for manual copy/paste.
+4. **Dice log surfacing** - Display the latest dice log entries inside the sidebar with filters per character so players and the LLM can reference them outside the modal.
 
-Once these pieces exist, the extension will have a concrete data model ready for persistence, dice logic, and UI layers in later steps.
+Once these UI foundations exist we can move on to reworking prompt templates, parser logic, and SillyTavern integrations for multi-character WoD sessions.
 
 ---
 
-**Changelog (Step 1)** – Reorganized the specification to emphasize concrete data shapes, runtime state expectations, and dice-handling pseudocode aligned with the AGENTS plan. This file now serves as the contract for Step 2 development.
+**Changelog (Step 1)** - Reorganized the specification to emphasize concrete data shapes, runtime state expectations, and dice-handling pseudocode aligned with the AGENTS plan. This file now serves as the contract for Step 2 development.

@@ -57,6 +57,17 @@ export const defaultSettings = {
         top: 'calc(var(--topBarBlockSize) + 60px)',
         right: '12px'
     }, // Saved position for mobile FAB button
+    wod: {
+        version: 1,
+        sheetRegistry: {},
+        sheetOrder: [],
+        activeSheetId: null,
+        diceDefaults: {
+            difficulty: 6,
+            explode: '10-again'
+        },
+        diceLogRetention: 50
+    },
     userStats: {
         health: 100,
         satiety: 100,

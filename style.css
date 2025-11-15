@@ -6583,3 +6583,279 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 }
 
 
+
+/* === World of Darkness Sheet UI === */
+.wod-sheet-root {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.wod-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--rpg-accent);
+    border: 1px solid var(--rpg-border);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.wod-toolbar-label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: var(--rpg-text);
+    letter-spacing: 0.05em;
+}
+
+.wod-character-select {
+    flex: 1 1 180px;
+    min-width: 140px;
+    border-radius: 6px;
+    border: 1px solid var(--rpg-border);
+    background: var(--SmartThemeBlurTintColor, #141421);
+    color: var(--rpg-text);
+    padding: 6px;
+}
+
+.wod-toolbar-btn,
+.wod-mini-btn {
+    border: 1px solid var(--rpg-border);
+    background: var(--rpg-highlight);
+    color: #fff;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.wod-toolbar-btn--ghost,
+.wod-mini-btn--danger {
+    background: transparent;
+    color: var(--rpg-text);
+}
+
+.wod-toolbar-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 0.75rem;
+    color: var(--rpg-text);
+    opacity: 0.75;
+}
+
+.wod-dirty-pill {
+    border-radius: 999px;
+    padding: 2px 8px;
+    border: 1px solid var(--rpg-highlight);
+    color: var(--rpg-highlight);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.wod-card {
+    background: var(--rpg-bg);
+    border: 1px solid var(--rpg-border);
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+}
+
+.wod-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.wod-card-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--rpg-text);
+}
+
+.wod-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.wod-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.wod-grid--two {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.wod-grid--three {
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.wod-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wod-field-label {
+    font-size: 0.8rem;
+    color: var(--rpg-text);
+    opacity: 0.75;
+}
+
+.wod-field-input,
+.wod-field textarea,
+.wod-sync-output {
+    border-radius: 6px;
+    border: 1px solid var(--rpg-border);
+    background: var(--SmartThemeBlurTintColor, rgba(0,0,0,0.3));
+    color: var(--rpg-text);
+    padding: 6px;
+    width: 100%;
+    resize: vertical;
+}
+
+.wod-attribute-column h5,
+.wod-ability-column h5,
+.wod-equipment-column h5 {
+    margin: 0 0 6px;
+    font-size: 0.9rem;
+    color: var(--rpg-text);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.wod-trait-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--rpg-text);
+}
+
+.wod-dot-track {
+    display: flex;
+    gap: 4px;
+}
+
+.wod-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--rpg-border);
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+}
+
+.wod-dot.is-active {
+    background: var(--rpg-highlight);
+    border-color: var(--rpg-highlight);
+}
+
+.wod-health-track {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.wod-health-level {
+    flex: 1 1 110px;
+    border-radius: 8px;
+    border: 1px solid var(--rpg-border);
+    padding: 6px;
+    background: rgba(255,255,255,0.03);
+    color: var(--rpg-text);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.wod-list-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 8px;
+    background: rgba(0,0,0,0.2);
+}
+
+.wod-subsection {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wod-empty-hint {
+    opacity: 0.6;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.wod-sync-panel .wod-sync-output {
+    min-height: 200px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.wod-dice-log-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.wod-dice-row {
+    border: 1px solid var(--rpg-border);
+    border-radius: 8px;
+    padding: 8px;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wod-dice-row__header {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.wod-dice-row__result {
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+.wod-dice-row__result--botch {
+    color: #ff4d4f;
+}
+
+.wod-dice-row__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+
+.wod-dice-row__notes {
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+.wod-danger {
+    color: #ff4d4f;
+}

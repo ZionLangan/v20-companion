@@ -13,7 +13,12 @@ import {
     updateExtensionSettings,
     setLastGeneratedData,
     setCommittedTrackerData,
-    FEATURE_FLAGS
+    FEATURE_FLAGS,
+    wodRuntimeState,
+    setActiveWodSheetId,
+    setWodChatOverrides,
+    clearWodChatOverrides,
+    serializeWodChatOverrides
 } from './state.js';
 import { migrateInventory } from '../utils/migration.js';
 import { validateStoredInventory, cleanItemString } from '../utils/security.js';
@@ -143,6 +148,11 @@ export function saveChatData() {
         timestamp: Date.now()
     };
 
+    const wodMetadata = buildWodChatMetadata();
+    if (wodMetadata) {
+        chat_metadata.rpg_companion_v20 = wodMetadata;
+    }
+
     saveChatDebounced();
 }
 
@@ -269,6 +279,13 @@ export function loadChatData() {
 
     // Validate inventory structure (Bug #3 fix)
     validateInventoryStructure(extensionSettings.userStats.inventory, 'chat');
+
+    if (chat_metadata.rpg_companion_v20) {
+        applyWodChatMetadata(chat_metadata.rpg_companion_v20);
+    } else {
+        clearWodChatOverrides();
+        wodRuntimeState.diceLog = [];
+    }
 
     // console.log('[RPG Companion] Loaded chat data:', savedData);
 }
@@ -537,7 +554,49 @@ function migrateToTrackerConfig() {
                 enabled: true,
                 name: 'Thoughts',
                 description: 'Internal monologue (in first person POV, up to three sentences long)'
-            };
-        }
+        };
     }
+}
+
+function buildWodChatMetadata() {
+    if (!extensionSettings?.wod) {
+        return null;
+    }
+    return {
+        version: 1,
+        updatedAt: Date.now(),
+        activeSheetId: extensionSettings.wod.activeSheetId || wodRuntimeState.activeSheetId || null,
+        sheetOrder: [...wodRuntimeState.sheetOrder],
+        sheetOverrides: serializeWodChatOverrides(),
+        diceLog: cloneDiceLogEntries(wodRuntimeState.diceLog)
+    };
+}
+
+function applyWodChatMetadata(payload) {
+    if (!payload || typeof payload !== 'object') {
+        clearWodChatOverrides();
+        wodRuntimeState.diceLog = [];
+        return;
+    }
+    setWodChatOverrides(payload.sheetOverrides || {});
+    wodRuntimeState.diceLog = cloneDiceLogEntries(payload.diceLog || []);
+    if (Array.isArray(payload.sheetOrder) && payload.sheetOrder.length > 0) {
+        wodRuntimeState.sheetOrder = payload.sheetOrder.filter(id => wodRuntimeState.sheets.has(id) || wodRuntimeState.chatOverrides.has(id));
+    }
+    if (payload.activeSheetId) {
+        setActiveWodSheetId(payload.activeSheetId);
+    }
+}
+
+function cloneDiceLogEntries(entries) {
+    if (!Array.isArray(entries)) {
+        return [];
+    }
+    try {
+        return JSON.parse(JSON.stringify(entries));
+    } catch (error) {
+        console.warn('[RPG Companion] Failed to clone dice log entries', error);
+        return [];
+    }
+}
 }
