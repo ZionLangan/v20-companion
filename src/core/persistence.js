@@ -22,8 +22,7 @@ import {
 } from './state.js';
 import { migrateInventory } from '../utils/migration.js';
 import { validateStoredInventory, cleanItemString } from '../utils/security.js';
-
-const extensionName = 'third-party/rpg-companion-sillytavern';
+import { extensionName, legacyExtensionName } from './config.js';
 
 /**
  * Validates extension settings structure
@@ -68,6 +67,12 @@ export function loadSettings() {
         if (!extension_settings || typeof extension_settings !== 'object') {
             console.warn('[RPG Companion] extension_settings is not available, using default settings');
             return;
+        }
+
+        if (!extension_settings[extensionName] && extension_settings[legacyExtensionName]) {
+            console.log('[RPG Companion] Migrating settings from legacy key to v20 companion namespace');
+            extension_settings[extensionName] = extension_settings[legacyExtensionName];
+            delete extension_settings[legacyExtensionName];
         }
 
         if (extension_settings[extensionName]) {
@@ -128,6 +133,9 @@ export function saveSettings() {
     }
 
     extension_settings[extensionName] = extensionSettings;
+    if (extension_settings[legacyExtensionName]) {
+        delete extension_settings[legacyExtensionName];
+    }
     saveSettingsDebounced();
 }
 
