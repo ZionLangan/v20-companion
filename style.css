@@ -6743,6 +6743,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .wod-dot-track {
     display: flex;
     gap: 4px;
+    flex-wrap: wrap;
 }
 
 .wod-dot {
@@ -6858,4 +6859,85 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 
 .wod-danger {
     color: #ff4d4f;
+}
+
+.wod-card--essentials {
+    border-left: 4px solid var(--rpg-highlight);
+}
+
+.wod-essentials-primary > div {
+    min-width: 0;
+}
+
+.wod-morality-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.wod-collapsible .wod-collapse-toggle {
+    border: none;
+    background: transparent;
+    color: var(--rpg-text);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 4px;
+    border-radius: 6px;
+}
+
+.wod-collapsible .wod-collapse-toggle:hover {
+    color: var(--rpg-highlight);
+}
+
+.wod-card-body[hidden] {
+    display: none !important;
+}
+
+.wod-health-box {
+    width: 82px;
+    height: 60px;
+    border: 1px solid var(--rpg-border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255,255,255,0.02);
+    color: var(--rpg-text);
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.wod-health-box[data-state="bashing"] {
+    border-color: #d4c460;
+}
+
+.wod-health-box[data-state="lethal"] {
+    border-color: #ff7043;
+}
+
+.wod-health-box[data-state="aggravated"] {
+    border-color: #ff4d4f;
+}
+
+.wod-health-box__label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.wod-health-box__glyph {
+    font-size: 1.3rem;
+}
+
+.wod-resource-track {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.wod-resource-track__value {
+    font-weight: 600;
+    min-width: 44px;
 }

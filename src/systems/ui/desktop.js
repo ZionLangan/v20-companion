@@ -6,7 +6,7 @@
 /**
  * Sets up desktop tab navigation for organizing content.
  * Only runs on desktop viewports (>1000px).
- * Creates two tabs: Status (Stats/Info/Thoughts) and Inventory.
+ * Creates desktop panes for Status (active sheet), Characters, and Quests.
  */
 export function setupDesktopTabs() {
     const isDesktop = window.innerWidth > 1000;
@@ -19,13 +19,11 @@ export function setupDesktopTabs() {
 
     // Get existing sections
     const $userStats = $('#rpg-user-stats');
-    const $infoBox = $('#rpg-info-box');
-    const $thoughts = $('#rpg-thoughts');
-    const $inventory = $('#rpg-inventory');
+    const $characters = $('#rpg-characters');
     const $quests = $('#rpg-quests');
 
     // If no sections exist, nothing to organize
-    if ($userStats.length === 0 && $infoBox.length === 0 && $thoughts.length === 0 && $inventory.length === 0 && $quests.length === 0) {
+    if ($userStats.length === 0 && $characters.length === 0 && $quests.length === 0) {
         return;
     }
 
@@ -36,9 +34,9 @@ export function setupDesktopTabs() {
                 <i class="fa-solid fa-chart-simple"></i>
                 <span>Status</span>
             </button>
-            <button class="rpg-tab-btn" data-tab="inventory">
-                <i class="fa-solid fa-box"></i>
-                <span>Inventory</span>
+            <button class="rpg-tab-btn" data-tab="characters">
+                <i class="fa-solid fa-users"></i>
+                <span>Characters</span>
             </button>
             <button class="rpg-tab-btn" data-tab="quests">
                 <i class="fa-solid fa-scroll"></i>
@@ -49,7 +47,7 @@ export function setupDesktopTabs() {
 
     // Create tab content containers
     const $statusTab = $('<div class="rpg-tab-content active" data-tab-content="status"></div>');
-    const $inventoryTab = $('<div class="rpg-tab-content" data-tab-content="inventory"></div>');
+    const $charactersTab = $('<div class="rpg-tab-content" data-tab-content="characters"></div>');
     const $questsTab = $('<div class="rpg-tab-content" data-tab-content="quests"></div>');
 
     // Move sections into their respective tabs (detach to preserve event handlers)
@@ -57,21 +55,13 @@ export function setupDesktopTabs() {
         $statusTab.append($userStats.detach());
         $userStats.show();
     }
-    if ($infoBox.length > 0) {
-        $statusTab.append($infoBox.detach());
-        $infoBox.show();
-    }
-    if ($thoughts.length > 0) {
-        $statusTab.append($thoughts.detach());
-        $thoughts.show();
-    }
-    if ($inventory.length > 0) {
-        $inventoryTab.append($inventory.detach());
-        $inventory.show();
-    }
     if ($quests.length > 0) {
         $questsTab.append($quests.detach());
         $quests.show();
+    }
+    if ($characters.length > 0) {
+        $charactersTab.append($characters.detach());
+        $characters.show();
     }
 
     // Hide dividers on desktop tabs (tabs separate content naturally)
@@ -81,7 +71,7 @@ export function setupDesktopTabs() {
     const $tabsContainer = $('<div class="rpg-tabs-container"></div>');
     $tabsContainer.append($tabNav);
     $tabsContainer.append($statusTab);
-    $tabsContainer.append($inventoryTab);
+    $tabsContainer.append($charactersTab);
     $tabsContainer.append($questsTab);
 
     // Replace content box with tabs container
@@ -110,44 +100,23 @@ export function setupDesktopTabs() {
 export function removeDesktopTabs() {
     // Get sections from tabs before removing
     const $userStats = $('#rpg-user-stats').detach();
-    const $infoBox = $('#rpg-info-box').detach();
-    const $thoughts = $('#rpg-thoughts').detach();
-    const $inventory = $('#rpg-inventory').detach();
+    const $characters = $('#rpg-characters').detach();
     const $quests = $('#rpg-quests').detach();
 
     // Remove tabs container
     $('.rpg-tabs-container').remove();
 
-    // Get dividers
-    const $dividerStats = $('#rpg-divider-stats');
-    const $dividerInfo = $('#rpg-divider-info');
-    const $dividerThoughts = $('#rpg-divider-thoughts');
-
     // Restore original sections to content box in correct order
     const $contentBox = $('.rpg-content-box');
 
-    // Re-insert sections in original order: User Stats, Info Box, Thoughts, Inventory, Quests
-    if ($dividerStats.length) {
-        $dividerStats.before($userStats);
-        $dividerInfo.before($infoBox);
-        $dividerThoughts.before($thoughts);
-        $contentBox.append($inventory);
-        $contentBox.append($quests);
-    } else {
-        // Fallback if dividers don't exist
-        $contentBox.append($userStats);
-        $contentBox.append($infoBox);
-        $contentBox.append($thoughts);
-        $contentBox.append($inventory);
-        $contentBox.append($quests);
-    }
+    $contentBox.append($userStats);
+    $contentBox.append($characters);
+    $contentBox.append($quests);
 
     // Show sections and dividers
     $userStats.show();
-    $infoBox.show();
-    $thoughts.show();
-    $inventory.show();
-    $('.rpg-divider').show();
+    $characters.show();
+    $quests.show();
 
     console.log('[RPG Desktop] Desktop tabs removed');
 }

@@ -17,7 +17,8 @@ const HEALTH_STATES = ['ok', 'bashing', 'lethal', 'aggravated'];
 
 const uiState = {
     syncPanelSheet: null,
-    logFilter: 'active'
+    logFilter: 'active',
+    sectionToggles: new Map()
 };
 
 /**
@@ -109,61 +110,51 @@ function renderCharacterToolbar(sheet, dirty) {
 }
 
 function renderSheetContent(sheet) {
-    return `
-        <div class="wod-sections">
-            ${renderIdentitySection(sheet)}
-            ${renderAttributesSection(sheet)}
-            ${renderAbilitiesSection(sheet)}
-            ${renderAdvantagesSection(sheet)}
-            ${renderPowersSection(sheet)}
-            ${renderEquipmentSection(sheet)}
-            ${renderNotesSection(sheet)}
-        </div>
-    `;
+    const sections = [
+        renderTrackersCard(sheet),
+        renderCollapsibleCard('identity', 'Identity & Chronicle', buildIdentityFields(sheet), { defaultCollapsed: false }),
+        renderCollapsibleCard('attributes', 'Attributes', buildAttributesGrid(sheet)),
+        renderCollapsibleCard('abilities', 'Abilities', buildAbilitiesGrid(sheet)),
+        renderCollapsibleCard('backgrounds', 'Backgrounds & Virtues', buildBackgroundsContent(sheet)),
+        renderCollapsibleCard('powers', 'Disciplines & Powers', buildPowersContent(sheet)),
+        renderCollapsibleCard('equipment', 'Equipment & Assets', buildEquipmentContent(sheet)),
+        renderCollapsibleCard('notes', 'Merits, Flaws & Notes', buildNotesContent(sheet))
+    ];
+    return `<div class="wod-sections">${sections.join('')}</div>`;
 }
 
-function renderIdentitySection(sheet) {
+function buildIdentityFields(sheet) {
     const meta = sheet.meta || {};
     const metaNotes = Array.isArray(meta.notes) ? meta.notes.join('\n') : '';
     return `
-        <section class="wod-card">
-            <header class="wod-card-header">
-                <h4>Identity</h4>
-            </header>
-            <div class="wod-card-body wod-grid wod-grid--two">
-                ${renderTextInput('Name', 'meta.name', meta.name)}
-                ${renderTextInput('Concept', 'meta.concept', meta.concept)}
-                ${renderTextInput('Player', 'meta.player', meta.player)}
-                ${renderTextInput('Chronicle', 'meta.chronicle', meta.chronicle)}
-                ${renderTextInput('Faction Type', 'meta.faction.type', meta.faction?.type)}
-                ${renderTextInput('Faction Value', 'meta.faction.value', meta.faction?.value)}
-                ${renderTextInput('Supernatural Type', 'meta.supernaturalType', meta.supernaturalType)}
-                ${renderTextInput('Supernatural Subtype', 'meta.supernaturalSubtype', meta.supernaturalSubtype)}
-                ${renderTextInput('Nature', 'meta.nature', meta.nature)}
-                ${renderTextInput('Demeanor', 'meta.demeanor', meta.demeanor)}
-                ${renderNumberInput('Age', 'meta.age', meta.age, 0, 500)}
-                ${renderNumberInput('Apparent Age', 'meta.apparentAge', meta.apparentAge, 0, 500)}
-                ${renderTextInput('Pronouns', 'meta.pronouns', meta.pronouns)}
-            </div>
-            <label class="wod-field-label">Identity Notes</label>
-            <textarea class="wod-field-input" data-path="meta.notes" data-input-type="string-array" rows="3">${escapeHtml(metaNotes)}</textarea>
-        </section>
+        <div class="wod-grid wod-grid--two">
+            ${renderTextInput('Name', 'meta.name', meta.name)}
+            ${renderTextInput('Concept', 'meta.concept', meta.concept)}
+            ${renderTextInput('Player', 'meta.player', meta.player)}
+            ${renderTextInput('Chronicle', 'meta.chronicle', meta.chronicle)}
+            ${renderTextInput('Faction Type', 'meta.faction.type', meta.faction?.type)}
+            ${renderTextInput('Faction Value', 'meta.faction.value', meta.faction?.value)}
+            ${renderTextInput('Supernatural Type', 'meta.supernaturalType', meta.supernaturalType)}
+            ${renderTextInput('Supernatural Subtype', 'meta.supernaturalSubtype', meta.supernaturalSubtype)}
+            ${renderTextInput('Nature', 'meta.nature', meta.nature)}
+            ${renderTextInput('Demeanor', 'meta.demeanor', meta.demeanor)}
+            ${renderNumberInput('Age', 'meta.age', meta.age, 0, 500)}
+            ${renderNumberInput('Apparent Age', 'meta.apparentAge', meta.apparentAge, 0, 500)}
+            ${renderTextInput('Pronouns', 'meta.pronouns', meta.pronouns)}
+        </div>
+        <label class="wod-field-label">Identity Notes</label>
+        <textarea class="wod-field-input" data-path="meta.notes" data-input-type="string-array" rows="3">${escapeHtml(metaNotes)}</textarea>
     `;
 }
 
-function renderAttributesSection(sheet) {
+function buildAttributesGrid(sheet) {
     const attributes = sheet.traits?.attributes || {};
     return `
-        <section class="wod-card">
-            <header class="wod-card-header">
-                <h4>Attributes</h4>
-            </header>
-            <div class="wod-card-body wod-grid wod-grid--three">
-                ${renderAttributeColumn('Physical', attributes.physical || {}, 'traits.attributes.physical')}
-                ${renderAttributeColumn('Social', attributes.social || {}, 'traits.attributes.social')}
-                ${renderAttributeColumn('Mental', attributes.mental || {}, 'traits.attributes.mental')}
-            </div>
-        </section>
+        <div class="wod-grid wod-grid--three">
+            ${renderAttributeColumn('Physical', attributes.physical || {}, 'traits.attributes.physical')}
+            ${renderAttributeColumn('Social', attributes.social || {}, 'traits.attributes.social')}
+            ${renderAttributeColumn('Mental', attributes.mental || {}, 'traits.attributes.mental')}
+        </div>
     `;
 }
 
@@ -181,19 +172,14 @@ function renderAttributeColumn(label, group, basePath) {
     `;
 }
 
-function renderAbilitiesSection(sheet) {
+function buildAbilitiesGrid(sheet) {
     const abilities = sheet.traits?.abilities || {};
     return `
-        <section class="wod-card">
-            <header class="wod-card-header">
-                <h4>Abilities</h4>
-            </header>
-            <div class="wod-card-body wod-grid wod-grid--three">
-                ${renderAbilityBlock('Talents', abilities.talents || {}, 'traits.abilities.talents')}
-                ${renderAbilityBlock('Skills', abilities.skills || {}, 'traits.abilities.skills')}
-                ${renderAbilityBlock('Knowledges', abilities.knowledges || {}, 'traits.abilities.knowledges')}
-            </div>
-        </section>
+        <div class="wod-grid wod-grid--three">
+            ${renderAbilityBlock('Talents', abilities.talents || {}, 'traits.abilities.talents')}
+            ${renderAbilityBlock('Skills', abilities.skills || {}, 'traits.abilities.skills')}
+            ${renderAbilityBlock('Knowledges', abilities.knowledges || {}, 'traits.abilities.knowledges')}
+        </div>
     `;
 }
 
@@ -211,52 +197,35 @@ function renderAbilityBlock(label, group, basePath) {
     `;
 }
 
-function renderAdvantagesSection(sheet) {
+function renderTrackersCard(sheet) {
     const advantages = sheet.advantages || {};
-    const virtues = advantages.virtues || {};
-    const morality = advantages.morality || {};
     const willpower = advantages.willpower || {};
+    const morality = advantages.morality || {};
     const health = advantages.health || [];
     const resourcePools = advantages.resourcePools || [];
     return `
-        <section class="wod-card">
+        <section class="wod-card wod-card--essentials">
             <header class="wod-card-header">
-                <h4>Advantages & Tracks</h4>
+                <h4>Resources & Health</h4>
             </header>
             <div class="wod-card-body">
-                <div class="wod-grid">
-                    <div>
-                        <h5>Virtues</h5>
-                        ${Object.entries(virtues).map(([key, value]) => `
-                            <label class="wod-field-label">${toTitleCase(key)}</label>
-                            ${renderDotTrack(`advantages.virtues.${key}`, value, ATTRIBUTE_MAX)}
-                        `).join('')}
-                    </div>
-                    <div>
-                        <h5>Morality / Path</h5>
-                        ${renderTextInput('Path Type', 'advantages.morality.type', morality.type)}
-                        ${renderNumberInput('Rating', 'advantages.morality.rating', morality.rating, 0, EXTENDED_MAX)}
-                        ${renderTextInput('Notes', 'advantages.morality.notes', morality.notes)}
-                    </div>
+                <div class="wod-grid wod-grid--two wod-essentials-primary">
                     <div>
                         <h5>Willpower</h5>
                         <label class="wod-field-label">Permanent</label>
                         ${renderDotTrack('advantages.willpower.permanent', willpower.permanent, EXTENDED_MAX, { enforce: 'willpower-permanent' })}
                         <label class="wod-field-label">Current</label>
                         ${renderDotTrack('advantages.willpower.current', willpower.current, EXTENDED_MAX, { enforce: 'willpower-current' })}
+                        <label class="wod-field-label">Morality / Path</label>
+                        <div class="wod-morality-row">
+                            ${renderTextInput('Path', 'advantages.morality.type', morality.type, true)}
+                            ${renderNumberInput('Rating', 'advantages.morality.rating', morality.rating, 0, EXTENDED_MAX, true)}
+                        </div>
+                        ${renderTextInput('Notes', 'advantages.morality.notes', morality.notes, true)}
                     </div>
-                </div>
-                <div class="wod-subsection">
-                    <h5>Backgrounds</h5>
-                    ${renderBackgroundList(advantages.backgrounds || [])}
-                    <button class="wod-mini-btn" data-action="add-row" data-template="background" data-path="advantages.backgrounds">
-                        <i class="fa-solid fa-plus"></i> Add Background
-                    </button>
-                </div>
-                <div class="wod-subsection">
-                    <h5>Health Track</h5>
-                    <div class="wod-health-track">
-                        ${health.map((level, index) => renderHealthLevel(level, index)).join('')}
+                    <div>
+                        <h5>Health Track</h5>
+                        ${renderHealthTrack(health)}
                     </div>
                 </div>
                 <div class="wod-subsection">
@@ -268,6 +237,60 @@ function renderAdvantagesSection(sheet) {
                 </div>
             </div>
         </section>
+    `;
+}
+
+function renderCollapsibleCard(id, title, body, options = {}) {
+    const collapsed = isSectionCollapsed(id, options.defaultCollapsed !== undefined ? options.defaultCollapsed : true);
+    return `
+        <section class="wod-card wod-collapsible ${collapsed ? 'is-collapsed' : ''}" data-section-id="${id}">
+            <header class="wod-card-header">
+                <h4>${title}</h4>
+                <button class="wod-collapse-toggle" type="button" data-section-toggle="${id}" aria-expanded="${!collapsed}">
+                    <i class="fa-solid fa-chevron-${collapsed ? 'down' : 'up'}"></i>
+                </button>
+            </header>
+            <div class="wod-card-body" ${collapsed ? 'hidden' : ''}>
+                ${body}
+            </div>
+        </section>
+    `;
+}
+
+function isSectionCollapsed(sectionId, defaultCollapsed = true) {
+    if (!uiState.sectionToggles.has(sectionId)) {
+        uiState.sectionToggles.set(sectionId, defaultCollapsed);
+    }
+    return uiState.sectionToggles.get(sectionId);
+}
+
+function toggleSectionCollapsed(sectionId) {
+    if (!sectionId) return;
+    const current = isSectionCollapsed(sectionId, true);
+    uiState.sectionToggles.set(sectionId, !current);
+}
+
+function buildBackgroundsContent(sheet) {
+    const advantages = sheet.advantages || {};
+    const virtues = advantages.virtues || {};
+    const backgrounds = advantages.backgrounds || [];
+    return `
+        <div class="wod-grid">
+            <div>
+                <h5>Virtues</h5>
+                ${Object.entries(virtues).map(([key, value]) => `
+                    <label class="wod-field-label">${toTitleCase(key)}</label>
+                    ${renderDotTrack(`advantages.virtues.${key}`, value, ATTRIBUTE_MAX)}
+                `).join('')}
+            </div>
+            <div>
+                <h5>Backgrounds</h5>
+                ${renderBackgroundList(backgrounds)}
+                <button class="wod-mini-btn" data-action="add-row" data-template="background" data-path="advantages.backgrounds">
+                    <i class="fa-solid fa-plus"></i> Add Background
+                </button>
+            </div>
+        </div>
     `;
 }
 
@@ -287,13 +310,24 @@ function renderBackgroundList(list) {
     `).join('');
 }
 
-function renderHealthLevel(level, index) {
-    const current = level.state || 'ok';
-    const icon = current === 'ok' ? '—' : current.charAt(0).toUpperCase();
+function renderHealthTrack(levels = []) {
+    if (!Array.isArray(levels) || levels.length === 0) {
+        return '<p class="wod-empty-hint">Health levels not configured.</p>';
+    }
     return `
-        <button class="wod-health-level" data-index="${index}" data-level-label="${level.level}" data-state="${current}">
-            <span>${escapeHtml(level.level)}</span>
-            <strong>${icon}</strong>
+        <div class="wod-health-track">
+            ${levels.map((level, index) => renderHealthLevel(level, index)).join('')}
+        </div>
+    `;
+}
+
+function renderHealthLevel(level, index) {
+    const state = level.state || 'ok';
+    const glyph = state === 'ok' ? '' : state === 'bashing' ? '/' : state === 'lethal' ? 'X' : '*';
+    return `
+        <button class="wod-health-box" data-index="${index}" data-level-label="${level.level}" data-state="${state}">
+            <span class="wod-health-box__label">${escapeHtml(level.level)}</span>
+            <span class="wod-health-box__glyph">${glyph}</span>
         </button>
     `;
 }
@@ -302,35 +336,40 @@ function renderResourcePools(pools) {
     if (!Array.isArray(pools) || pools.length === 0) {
         return '<p class="wod-empty-hint">No resource pools configured.</p>';
     }
-    return pools.map((pool, index) => `
-        <div class="wod-list-row wod-list-row--pool" data-index="${index}">
-            ${renderTextInput('Name', `advantages.resourcePools[${index}].name`, pool.name, true)}
-            ${renderTextInput('Type', `advantages.resourcePools[${index}].type`, pool.type, true)}
-            ${renderNumberInput('Current', `advantages.resourcePools[${index}].current`, pool.current, 0, 999, true)}
-            ${renderNumberInput('Capacity', `advantages.resourcePools[${index}].capacity`, pool.capacity, 0, 999, true)}
-            <textarea class="wod-field-input" rows="2" data-path="advantages.resourcePools[${index}].notes">${escapeHtml(pool.notes || '')}</textarea>
-            <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="advantages.resourcePools[${index}]">
-                Remove
-            </button>
-        </div>
-    `).join('');
-}
-
-function renderPowersSection(sheet) {
-    const powerSets = sheet.powerSets || [];
-    return `
-        <section class="wod-card">
-            <header class="wod-card-header">
-                <h4>Disciplines & Powers</h4>
-            </header>
-            <div class="wod-card-body">
-                ${powerSets.length === 0 ? '<p class="wod-empty-hint">No power sets defined.</p>' : ''}
-                ${powerSets.map((set, index) => renderPowerSet(set, index)).join('')}
-                <button class="wod-mini-btn" data-action="add-row" data-template="powerSet" data-path="powerSets">
-                    <i class="fa-solid fa-plus"></i> Add Power Set
+    return pools.map((pool, index) => {
+        const maxDots = Math.max(Number(pool.capacity) || 0, Number(pool.current) || 0, 1);
+        return `
+            <div class="wod-list-row wod-list-row--pool" data-index="${index}">
+                <div class="wod-grid wod-grid--two">
+                    ${renderTextInput('Name', `advantages.resourcePools[${index}].name`, pool.name, true)}
+                    ${renderTextInput('Type', `advantages.resourcePools[${index}].type`, pool.type, true)}
+                </div>
+                <div class="wod-resource-track">
+                    <span class="wod-resource-track__value">${Number(pool.current) || 0}/${Number(pool.capacity) || 0}</span>
+                    ${renderDotTrack(`advantages.resourcePools[${index}].current`, pool.current, maxDots)}
+                </div>
+                <div class="wod-grid wod-grid--two">
+                    ${renderNumberInput('Capacity', `advantages.resourcePools[${index}].capacity`, pool.capacity, 0, 999, true)}
+                    <textarea class="wod-field-input" rows="2" data-path="advantages.resourcePools[${index}].notes">${escapeHtml(pool.notes || '')}</textarea>
+                </div>
+                <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="advantages.resourcePools[${index}]">
+                    Remove
                 </button>
             </div>
-        </section>
+        `;
+    }).join('');
+}
+
+function buildPowersContent(sheet) {
+    const powerSets = sheet.powerSets || [];
+    return `
+        <div class="wod-card-body">
+            ${powerSets.length === 0 ? '<p class="wod-empty-hint">No power sets defined.</p>' : ''}
+            ${powerSets.map((set, index) => renderPowerSet(set, index)).join('')}
+            <button class="wod-mini-btn" data-action="add-row" data-template="powerSet" data-path="powerSets">
+                <i class="fa-solid fa-plus"></i> Add Power Set
+            </button>
+        </div>
     `;
 }
 
@@ -372,19 +411,14 @@ function renderPowerSet(set, index) {
     `;
 }
 
-function renderEquipmentSection(sheet) {
+function buildEquipmentContent(sheet) {
     const equipment = sheet.equipment || {};
     return `
-        <section class="wod-card">
-            <header class="wod-card-header">
-                <h4>Equipment & Assets</h4>
-            </header>
-            <div class="wod-card-body wod-grid wod-grid--three">
-                ${renderEquipmentGroup('On Person', equipment.inventory || [], 'equipment.inventory')}
-                ${renderEquipmentGroup('Stored', equipment.stored || [], 'equipment.stored')}
-                ${renderEquipmentGroup('Assets', equipment.assets || [], 'equipment.assets')}
-            </div>
-        </section>
+        <div class="wod-card-body wod-grid wod-grid--three">
+            ${renderEquipmentGroup('On Person', equipment.inventory || [], 'equipment.inventory')}
+            ${renderEquipmentGroup('Stored', equipment.stored || [], 'equipment.stored')}
+            ${renderEquipmentGroup('Assets', equipment.assets || [], 'equipment.assets')}
+        </div>
     `;
 }
 
@@ -411,22 +445,17 @@ function renderEquipmentGroup(label, items, basePath) {
     `;
 }
 
-function renderNotesSection(sheet) {
+function buildNotesContent(sheet) {
     const merits = sheet.merits || [];
     const flaws = sheet.flaws || [];
     const notes = Array.isArray(sheet.notes) ? sheet.notes.join('\n') : '';
     return `
-        <section class="wod-card">
-            <header class="wod-card-header">
-                <h4>Merits, Flaws & Notes</h4>
-            </header>
-            <div class="wod-card-body wod-grid wod-grid--two">
-                ${renderTraitList('Merits', merits, 'merits')}
-                ${renderTraitList('Flaws', flaws, 'flaws')}
-            </div>
-            <label class="wod-field-label">Story Notes</label>
-            <textarea class="wod-field-input" rows="4" data-path="notes" data-input-type="string-array">${escapeHtml(notes)}</textarea>
-        </section>
+        <div class="wod-grid wod-grid--two">
+            ${renderTraitList('Merits', merits, 'merits')}
+            ${renderTraitList('Flaws', flaws, 'flaws')}
+        </div>
+        <label class="wod-field-label">Story Notes</label>
+        <textarea class="wod-field-input" rows="4" data-path="notes" data-input-type="string-array">${escapeHtml(notes)}</textarea>
     `;
 }
 
@@ -591,7 +620,8 @@ function ensureSheetEvents() {
         .on('blur', '.wod-field-input', handleFieldInputChange)
         .on('click', '.wod-mini-btn[data-action="add-row"]', handleAddRow)
         .on('click', '.wod-mini-btn[data-action="remove-row"]', handleRemoveRow)
-        .on('click', '.wod-health-level', handleHealthClick)
+        .on('click', '.wod-health-box', handleHealthClick)
+        .on('click', '.wod-collapse-toggle', handleSectionToggle)
         .on('click', '[data-action="open-sync"]', handleOpenSync)
         .on('click', '[data-action="close-sync"]', handleCloseSync)
         .on('click', '[data-action="copy-sync"]', handleCopySync)
@@ -709,6 +739,13 @@ function handleHealthClick(event) {
         const nextIndex = (HEALTH_STATES.indexOf(current) + 1) % HEALTH_STATES.length;
         track[index].state = HEALTH_STATES[nextIndex];
     });
+}
+
+function handleSectionToggle(event) {
+    event.preventDefault();
+    const sectionId = $(event.currentTarget).data('sectionToggle');
+    toggleSectionCollapsed(sectionId);
+    renderWodSheet();
 }
 
 function handleOpenSync(event) {
