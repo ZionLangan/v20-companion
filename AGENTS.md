@@ -34,7 +34,6 @@ Each step should result in compiling code, updated docs, and (when applicable) t
 1. **WoD Rules Research & Spec Draft**
    - Gather authoritative v20 references for Attributes, Abilities, Advantages (Backgrounds, Virtues, Humanity/Path), health levels, blood pool limits per generation, willpower, and common Disciplines/Rituals.
    - Produce a design document (e.g., `docs/wod-spec.md`) capturing sheet structure, JSON schema for characters, dice pool logic (including specialties, 10-again, botches), and how trackers map to prompts.
-   - Identify any gaps (e.g., mage spheres, thaumaturgy rituals) and outline optional modules.
 
 2. **Data Model & Schema Implementation**
    - Replace `extensionSettings.userStats`, `classicStats`, and related tracker config with WoD-specific structures (per-character objects, sheet registry, dice defaults).

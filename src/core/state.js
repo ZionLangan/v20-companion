@@ -5,6 +5,157 @@
 
 // Type imports
 /** @typedef {import('../types/inventory.js').InventoryV2} InventoryV2 */
+/** @typedef {import('../types/wod.js').WodCharacterSheet} WodCharacterSheet */
+/** @typedef {import('../types/wod.js').WodRuntimeState} WodRuntimeState */
+/** @typedef {import('../types/wod.js').DicePoolConfig} DicePoolConfig */
+/** @typedef {import('../types/wod.js').DiceLogEntry} DiceLogEntry */
+
+const DEFAULT_WOD_DICE_DEFAULTS = Object.freeze({
+    difficulty: 6,
+    explode: '10-again'
+});
+
+const HEALTH_TEMPLATE = [
+    { level: 'Bruised', state: 'ok' },
+    { level: 'Hurt', state: 'ok' },
+    { level: 'Injured', state: 'ok' },
+    { level: 'Wounded', state: 'ok' },
+    { level: 'Mauled', state: 'ok' },
+    { level: 'Crippled', state: 'ok' },
+    { level: 'Incapacitated', state: 'ok' }
+];
+
+const ABILITY_TEMPLATE = {
+    talents: {
+        alertness: 0,
+        athletics: 0,
+        awareness: 0,
+        brawl: 0,
+        empathy: 0,
+        expression: 0,
+        intimidation: 0,
+        leadership: 0,
+        streetwise: 0,
+        subterfuge: 0
+    },
+    skills: {
+        animalKen: 0,
+        crafts: 0,
+        drive: 0,
+        etiquette: 0,
+        firearms: 0,
+        larceny: 0,
+        melee: 0,
+        performance: 0,
+        stealth: 0,
+        survival: 0
+    },
+    knowledges: {
+        academics: 0,
+        computer: 0,
+        finance: 0,
+        investigation: 0,
+        law: 0,
+        medicine: 0,
+        occult: 0,
+        politics: 0,
+        science: 0,
+        technology: 0
+    }
+};
+
+const TEMPLATE_WOD_SHEET = {
+    id: 'wod-template',
+    version: 1,
+    meta: {
+        name: 'Unnamed Character',
+        concept: 'Blank template',
+        notes: []
+    },
+    traits: {
+        attributes: {
+            physical: { strength: 1, dexterity: 1, stamina: 1 },
+            social: { charisma: 1, manipulation: 1, appearance: 1 },
+            mental: { perception: 1, intelligence: 1, wits: 1 }
+        },
+        abilities: ABILITY_TEMPLATE
+    },
+    advantages: {
+        backgrounds: [],
+        virtues: { conscience: 1, selfControl: 1, courage: 1 },
+        morality: { type: 'Humanity', rating: 7 },
+        willpower: { permanent: 5, current: 5 },
+        health: HEALTH_TEMPLATE,
+        resourcePools: []
+    },
+    powerSets: [],
+    merits: [],
+    flaws: [],
+    equipment: {
+        inventory: [],
+        stored: [],
+        assets: []
+    },
+    notes: []
+};
+
+/**
+ * Returns a deep copy of the WoD template sheet with a new id/meta override
+ * @param {Partial<WodCharacterSheet>} overrides
+ * @returns {WodCharacterSheet}
+ */
+export function createEmptyWodSheet(overrides = {}) {
+    const sheet = JSON.parse(JSON.stringify(TEMPLATE_WOD_SHEET));
+    if (overrides.id) {
+        sheet.id = overrides.id;
+    } else {
+        sheet.id = `wod-${Date.now()}`;
+    }
+    return {
+        ...sheet,
+        ...overrides,
+        meta: { ...sheet.meta, ...(overrides.meta || {}) },
+        traits: {
+            attributes: {
+                physical: { ...sheet.traits.attributes.physical, ...(overrides.traits?.attributes?.physical || {}) },
+                social: { ...sheet.traits.attributes.social, ...(overrides.traits?.attributes?.social || {}) },
+                mental: { ...sheet.traits.attributes.mental, ...(overrides.traits?.attributes?.mental || {}) }
+            },
+            abilities: {
+                talents: { ...sheet.traits.abilities.talents, ...(overrides.traits?.abilities?.talents || {}) },
+                skills: { ...sheet.traits.abilities.skills, ...(overrides.traits?.abilities?.skills || {}) },
+                knowledges: { ...sheet.traits.abilities.knowledges, ...(overrides.traits?.abilities?.knowledges || {}) }
+            }
+        },
+        advantages: {
+            ...sheet.advantages,
+            ...overrides.advantages,
+            health: overrides.advantages?.health || HEALTH_TEMPLATE.map(level => ({ ...level })),
+            resourcePools: overrides.advantages?.resourcePools || []
+        },
+        powerSets: overrides.powerSets || [],
+        merits: overrides.merits || [],
+        flaws: overrides.flaws || [],
+        equipment: {
+            inventory: overrides.equipment?.inventory || [],
+            stored: overrides.equipment?.stored || [],
+            assets: overrides.equipment?.assets || []
+        },
+        notes: overrides.notes || []
+    };
+}
+
+/**
+ * Live WoD runtime state for the UI / dice engine
+ * @type {WodRuntimeState}
+ */
+export const wodRuntimeState = {
+    sheets: new Map(),
+    sheetOrder: [],
+    activeSheetId: null,
+    diceLog: [],
+    diceDefaults: { ...DEFAULT_WOD_DICE_DEFAULTS }
+};
 
 /**
  * Extension settings - persisted to SillyTavern settings
@@ -38,6 +189,15 @@ export let extensionSettings = {
         top: 'calc(var(--topBarBlockSize) + 60px)',
         right: '12px'
     }, // Saved position for mobile FAB button
+    wod: {
+        version: 1,
+        sheetRegistry: {},
+        sheetOrder: [],
+        activeSheetId: null,
+        diceDefaults: { ...DEFAULT_WOD_DICE_DEFAULTS },
+        diceLogRetention: 50 // Number of roll entries to keep client-side
+    },
+    /** @deprecated Legacy tracker placeholder until WoD UI replaces it */
     userStats: {
         health: 100,
         satiety: 100,
@@ -61,7 +221,7 @@ export let extensionSettings = {
         hygiene: 'Hygiene',
         arousal: 'Arousal'
     },
-    // Tracker customization configuration
+    // Tracker customization configuration (legacy UI - pending WoD replacement)
     trackerConfig: {
         userStats: {
             // Array of custom stats (allows add/remove/rename)
@@ -144,7 +304,7 @@ export let extensionSettings = {
         optional: []         // Array of optional quest titles
     },
     level: 1, // User's character level
-    classicStats: {
+    classicStats: { // Legacy display values (to be replaced by WoD sheets)
         str: 10,
         dex: 10,
         con: 10,
@@ -162,6 +322,8 @@ export let extensionSettings = {
     debugMode: false, // Enable debug logging visible in UI (for mobile debugging)
     memoryMessagesToProcess: 16 // Number of messages to process per batch in memory recollection
 };
+
+syncWodDiceDefaultsFromSettings();
 
 /**
  * Last generated data from AI response
@@ -251,10 +413,14 @@ export let $questsContainer = null;
  */
 export function setExtensionSettings(newSettings) {
     extensionSettings = newSettings;
+    ensureWodSettings();
+    syncWodDiceDefaultsFromSettings();
 }
 
 export function updateExtensionSettings(updates) {
     Object.assign(extensionSettings, updates);
+    ensureWodSettings();
+    syncWodDiceDefaultsFromSettings();
 }
 
 export function setLastGeneratedData(data) {
@@ -315,4 +481,122 @@ export function setInventoryContainer($element) {
 
 export function setQuestsContainer($element) {
     $questsContainer = $element;
+}
+
+/**
+ * WoD runtime helpers
+ */
+export function getActiveWodSheet() {
+    if (!wodRuntimeState.activeSheetId) {
+        return null;
+    }
+    return wodRuntimeState.sheets.get(wodRuntimeState.activeSheetId) || null;
+}
+
+export function getWodSheet(sheetId) {
+    if (!sheetId) {
+        return null;
+    }
+    return wodRuntimeState.sheets.get(sheetId) || null;
+}
+
+export function setActiveWodSheetId(sheetId) {
+    if (sheetId && !wodRuntimeState.sheets.has(sheetId)) {
+        return;
+    }
+    wodRuntimeState.activeSheetId = sheetId || null;
+    ensureWodSettings();
+    extensionSettings.wod.activeSheetId = wodRuntimeState.activeSheetId;
+}
+
+export function setWodSheetRegistry(registry = {}) {
+    ensureWodSettings();
+    extensionSettings.wod.sheetRegistry = { ...registry };
+    wodRuntimeState.sheets = new Map();
+    Object.entries(registry).forEach(([sheetId, sheetData]) => {
+        wodRuntimeState.sheets.set(sheetId, sheetData);
+    });
+    const storedOrder = extensionSettings.wod.sheetOrder || [];
+    const filteredOrder = storedOrder.filter(id => wodRuntimeState.sheets.has(id));
+    wodRuntimeState.sheetOrder = filteredOrder.length > 0 ? filteredOrder : Array.from(wodRuntimeState.sheets.keys());
+    const candidateActive = extensionSettings.wod.activeSheetId || wodRuntimeState.sheetOrder[0] || null;
+    if (candidateActive && wodRuntimeState.sheets.has(candidateActive)) {
+        wodRuntimeState.activeSheetId = candidateActive;
+    } else {
+        wodRuntimeState.activeSheetId = wodRuntimeState.sheetOrder[0] || null;
+        extensionSettings.wod.activeSheetId = wodRuntimeState.activeSheetId;
+    }
+}
+
+export function upsertWodSheet(sheet) {
+    if (!sheet || !sheet.id) {
+        return;
+    }
+    wodRuntimeState.sheets.set(sheet.id, sheet);
+    if (!wodRuntimeState.sheetOrder.includes(sheet.id)) {
+        wodRuntimeState.sheetOrder.push(sheet.id);
+    }
+    ensureWodSettings();
+    extensionSettings.wod.sheetRegistry[sheet.id] = sheet;
+    extensionSettings.wod.sheetOrder = [...wodRuntimeState.sheetOrder];
+    if (!wodRuntimeState.activeSheetId) {
+        setActiveWodSheetId(sheet.id);
+    }
+}
+
+export function removeWodSheet(sheetId) {
+    wodRuntimeState.sheets.delete(sheetId);
+    wodRuntimeState.sheetOrder = wodRuntimeState.sheetOrder.filter(id => id !== sheetId);
+    ensureWodSettings();
+    delete extensionSettings.wod.sheetRegistry[sheetId];
+    extensionSettings.wod.sheetOrder = [...wodRuntimeState.sheetOrder];
+    if (wodRuntimeState.activeSheetId === sheetId) {
+        setActiveWodSheetId(wodRuntimeState.sheetOrder[0] || null);
+    }
+}
+
+export function appendWodDiceLog(entry) {
+    if (!entry) {
+        return;
+    }
+    wodRuntimeState.diceLog.push(entry);
+    const retention = extensionSettings?.wod?.diceLogRetention ?? 50;
+    while (wodRuntimeState.diceLog.length > retention) {
+        wodRuntimeState.diceLog.shift();
+    }
+}
+
+export function clearWodDiceLog() {
+    wodRuntimeState.diceLog = [];
+}
+
+export function setWodDiceDefaults(defaults = {}) {
+    ensureWodSettings();
+    extensionSettings.wod.diceDefaults = {
+        ...extensionSettings.wod.diceDefaults,
+        ...defaults
+    };
+    syncWodDiceDefaultsFromSettings();
+}
+
+function ensureWodSettings() {
+    if (!extensionSettings.wod) {
+        extensionSettings.wod = {
+            version: 1,
+            sheetRegistry: {},
+            sheetOrder: [],
+            activeSheetId: null,
+            diceDefaults: { ...DEFAULT_WOD_DICE_DEFAULTS },
+            diceLogRetention: 50
+        };
+    }
+}
+
+function syncWodDiceDefaultsFromSettings() {
+    ensureWodSettings();
+    const diceDefaults = extensionSettings.wod.diceDefaults || DEFAULT_WOD_DICE_DEFAULTS;
+    wodRuntimeState.diceDefaults = {
+        ...DEFAULT_WOD_DICE_DEFAULTS,
+        ...diceDefaults
+    };
 }
