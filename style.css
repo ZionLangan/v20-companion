@@ -6640,6 +6640,12 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     color: var(--rpg-text);
 }
 
+.wod-toolbar-btn--ghost.is-active {
+    border-color: var(--rpg-highlight);
+    color: var(--rpg-highlight);
+    background: rgba(255, 255, 255, 0.05);
+}
+
 .wod-toolbar-meta {
     display: flex;
     gap: 8px;
@@ -6721,6 +6727,18 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     resize: vertical;
 }
 
+.wod-field-input[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.wod-mini-btn[disabled],
+.wod-toolbar-btn[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .wod-attribute-column h5,
 .wod-ability-column h5,
 .wod-equipment-column h5 {
@@ -6759,6 +6777,24 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 .wod-dot.is-active {
     background: var(--rpg-highlight);
     border-color: var(--rpg-highlight);
+}
+
+.wod-dot-track[data-variant="resource"] .wod-dot {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.wod-dot-track[data-variant="resource"] .wod-dot:not(.is-active) {
+    opacity: 0.65;
+}
+
+.wod-dot.is-locked {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.wod-dot-track[data-locked="true"] {
+    opacity: 0.7;
 }
 
 .wod-health-track {

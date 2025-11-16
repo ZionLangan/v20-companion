@@ -10,6 +10,12 @@ The v20 overhaul replaces the generic tracker panels with a fully structured WoD
 - Edit Attributes, Abilities, Backgrounds, Virtues, Willpower, resource pools, health states, powers, merits/flaws, equipment, and notes directly inside the sidebar. All controls enforce WoD dot/box limits.
 - Every edit is tracked per chat via SillyTavern persistence (dirty sheets are flagged with a “Chat override” pill). Dice rolls launched from the modal automatically appear in the built-in dice log panel so both you and the LLM can reference authoritative results.
 
+### Editing & Resource Tracking
+
+- The sheet opens in **view mode** so you can reference mechanics without worrying about stray clicks. Hit the **Edit Sheet** button in the toolbar to unlock structural edits (attributes, abilities, backgrounds, powers, etc.). Inventory rows and live resources stay editable even while the rest of the sheet is locked.
+- Health levels now behave like the printed tracker: clicking any level cycles through Bashing -> Lethal -> Aggravated damage while automatically filling every box up to that point. Click the same level again to clear all wounds back to "ok".
+- Willpower (current) and every resource pool render as a single dot track. Filled dots show the current amount, greyed dots show the maximum capacity, and clicking a dot immediately sets the pool to that value.
+
 ### Manual JSON Sync
 
 Sheets remain file-backed so you can keep authoritative copies in version control:

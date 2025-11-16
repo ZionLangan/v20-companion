@@ -18,7 +18,8 @@ const HEALTH_STATES = ['ok', 'bashing', 'lethal', 'aggravated'];
 const uiState = {
     syncPanelSheet: null,
     logFilter: 'active',
-    sectionToggles: new Map()
+    sectionToggles: new Map(),
+    editMode: false
 };
 
 /**
@@ -58,7 +59,7 @@ export function renderWodSheet() {
     const sheet = getActiveWodSheet();
     const dirty = sheet ? isWodSheetDirty(sheet.id) : false;
     const html = `
-        <div class="wod-sheet-root" data-sheet-id="${sheet?.id || ''}">
+        <div class="wod-sheet-root" data-sheet-id="${sheet?.id || ''}" data-edit-mode="${uiState.editMode ? 'on' : 'off'}">
             ${renderCharacterToolbar(sheet, dirty)}
             ${sheet ? renderSheetContent(sheet) : renderEmptyState()}
             ${renderSyncPanel(sheet)}
@@ -91,6 +92,10 @@ function renderCharacterToolbar(sheet, dirty) {
                 ${options}
             </select>
             ${sheet ? `
+            <button class="wod-toolbar-btn wod-toolbar-btn--ghost ${uiState.editMode ? 'is-active' : ''}" data-action="toggle-edit">
+                <i class="fa-solid ${uiState.editMode ? 'fa-lock-open' : 'fa-pen-to-square'}"></i>
+                ${uiState.editMode ? 'Done Editing' : 'Edit Sheet'}
+            </button>
             <button class="wod-toolbar-btn" data-action="open-sync">
                 <i class="fa-solid fa-file-export"></i>
                 Sync to File
@@ -143,7 +148,7 @@ function buildIdentityFields(sheet) {
             ${renderTextInput('Pronouns', 'meta.pronouns', meta.pronouns)}
         </div>
         <label class="wod-field-label">Identity Notes</label>
-        <textarea class="wod-field-input" data-path="meta.notes" data-input-type="string-array" rows="3">${escapeHtml(metaNotes)}</textarea>
+        <textarea class="wod-field-input" data-path="meta.notes" data-input-type="string-array" rows="3" ${buildInteractionAttributes('edit')}>${escapeHtml(metaNotes)}</textarea>
     `;
 }
 
@@ -203,6 +208,7 @@ function renderTrackersCard(sheet) {
     const morality = advantages.morality || {};
     const health = advantages.health || [];
     const resourcePools = advantages.resourcePools || [];
+    const willpowerCap = Math.max(Number(willpower.permanent) || 0, 1);
     return `
         <section class="wod-card wod-card--essentials">
             <header class="wod-card-header">
@@ -215,7 +221,7 @@ function renderTrackersCard(sheet) {
                         <label class="wod-field-label">Permanent</label>
                         ${renderDotTrack('advantages.willpower.permanent', willpower.permanent, EXTENDED_MAX, { enforce: 'willpower-permanent' })}
                         <label class="wod-field-label">Current</label>
-                        ${renderDotTrack('advantages.willpower.current', willpower.current, EXTENDED_MAX, { enforce: 'willpower-current' })}
+                        ${renderDotTrack('advantages.willpower.current', willpower.current, willpowerCap, { enforce: 'willpower-current', mode: 'live', variant: 'resource' })}
                         <label class="wod-field-label">Morality / Path</label>
                         <div class="wod-morality-row">
                             ${renderTextInput('Path', 'advantages.morality.type', morality.type, true)}
@@ -231,7 +237,7 @@ function renderTrackersCard(sheet) {
                 <div class="wod-subsection">
                     <h5>Resource Pools</h5>
                     ${renderResourcePools(resourcePools)}
-                    <button class="wod-mini-btn" data-action="add-row" data-template="resource" data-path="advantages.resourcePools">
+                    <button class="wod-mini-btn" data-action="add-row" data-template="resource" data-path="advantages.resourcePools" ${buildInteractionAttributes('edit')}>
                         <i class="fa-solid fa-plus"></i> Add Pool
                     </button>
                 </div>
@@ -286,7 +292,7 @@ function buildBackgroundsContent(sheet) {
             <div>
                 <h5>Backgrounds</h5>
                 ${renderBackgroundList(backgrounds)}
-                <button class="wod-mini-btn" data-action="add-row" data-template="background" data-path="advantages.backgrounds">
+                <button class="wod-mini-btn" data-action="add-row" data-template="background" data-path="advantages.backgrounds" ${buildInteractionAttributes('edit')}>
                     <i class="fa-solid fa-plus"></i> Add Background
                 </button>
             </div>
@@ -302,8 +308,8 @@ function renderBackgroundList(list) {
         <div class="wod-list-row" data-index="${index}">
             ${renderTextInput('Name', `advantages.backgrounds[${index}].name`, entry.name, true)}
             ${renderDotTrack(`advantages.backgrounds[${index}].rating`, entry.rating, ATTRIBUTE_MAX)}
-            <textarea class="wod-field-input" rows="2" data-path="advantages.backgrounds[${index}].description">${escapeHtml(entry.description || '')}</textarea>
-            <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="advantages.backgrounds[${index}]">
+            <textarea class="wod-field-input" rows="2" data-path="advantages.backgrounds[${index}].description" ${buildInteractionAttributes('edit')}>${escapeHtml(entry.description || '')}</textarea>
+            <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="advantages.backgrounds[${index}]" ${buildInteractionAttributes('edit')}>
                 Remove
             </button>
         </div>
@@ -325,7 +331,7 @@ function renderHealthLevel(level, index) {
     const state = level.state || 'ok';
     const glyph = state === 'ok' ? '' : state === 'bashing' ? '/' : state === 'lethal' ? 'X' : '*';
     return `
-        <button class="wod-health-box" data-index="${index}" data-level-label="${level.level}" data-state="${state}">
+        <button class="wod-health-box" data-index="${index}" data-level-label="${level.level}" data-state="${state}" data-mode="live">
             <span class="wod-health-box__label">${escapeHtml(level.level)}</span>
             <span class="wod-health-box__glyph">${glyph}</span>
         </button>
@@ -337,7 +343,7 @@ function renderResourcePools(pools) {
         return '<p class="wod-empty-hint">No resource pools configured.</p>';
     }
     return pools.map((pool, index) => {
-        const maxDots = Math.max(Number(pool.capacity) || 0, Number(pool.current) || 0, 1);
+        const maxDots = Math.max(Number(pool.capacity) || 0, 1);
         return `
             <div class="wod-list-row wod-list-row--pool" data-index="${index}">
                 <div class="wod-grid wod-grid--two">
@@ -346,13 +352,13 @@ function renderResourcePools(pools) {
                 </div>
                 <div class="wod-resource-track">
                     <span class="wod-resource-track__value">${Number(pool.current) || 0}/${Number(pool.capacity) || 0}</span>
-                    ${renderDotTrack(`advantages.resourcePools[${index}].current`, pool.current, maxDots)}
+                    ${renderDotTrack(`advantages.resourcePools[${index}].current`, pool.current, maxDots, { mode: 'live', variant: 'resource' })}
                 </div>
                 <div class="wod-grid wod-grid--two">
                     ${renderNumberInput('Capacity', `advantages.resourcePools[${index}].capacity`, pool.capacity, 0, 999, true)}
-                    <textarea class="wod-field-input" rows="2" data-path="advantages.resourcePools[${index}].notes">${escapeHtml(pool.notes || '')}</textarea>
+                    <textarea class="wod-field-input" rows="2" data-path="advantages.resourcePools[${index}].notes" ${buildInteractionAttributes('edit')}>${escapeHtml(pool.notes || '')}</textarea>
                 </div>
-                <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="advantages.resourcePools[${index}]">
+                <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="advantages.resourcePools[${index}]" ${buildInteractionAttributes('edit')}>
                     Remove
                 </button>
             </div>
@@ -366,7 +372,7 @@ function buildPowersContent(sheet) {
         <div class="wod-card-body">
             ${powerSets.length === 0 ? '<p class="wod-empty-hint">No power sets defined.</p>' : ''}
             ${powerSets.map((set, index) => renderPowerSet(set, index)).join('')}
-            <button class="wod-mini-btn" data-action="add-row" data-template="powerSet" data-path="powerSets">
+            <button class="wod-mini-btn" data-action="add-row" data-template="powerSet" data-path="powerSets" ${buildInteractionAttributes('edit')}>
                 <i class="fa-solid fa-plus"></i> Add Power Set
             </button>
         </div>
@@ -386,7 +392,7 @@ function renderPowerSet(set, index) {
             <label class="wod-field-label">Tags</label>
             ${renderTextInput('Comma separated', `powerSets[${index}].tags`, (set.tags || []).join(', '), true)}
             <label class="wod-field-label">Notes</label>
-            <textarea class="wod-field-input" rows="2" data-path="powerSets[${index}].notes">${escapeHtml(set.notes || '')}</textarea>
+            <textarea class="wod-field-input" rows="2" data-path="powerSets[${index}].notes" ${buildInteractionAttributes('edit')}>${escapeHtml(set.notes || '')}</textarea>
             <div class="wod-subsection">
                 <h5>Powers</h5>
                 ${powers.length === 0 ? '<p class="wod-empty-hint">No individual powers recorded.</p>' : ''}
@@ -394,17 +400,17 @@ function renderPowerSet(set, index) {
                     <div class="wod-list-row" data-index="${powerIndex}">
                         ${renderTextInput('Name', `powerSets[${index}].powers[${powerIndex}].name`, power.name, true)}
                         ${renderNumberInput('Rating', `powerSets[${index}].powers[${powerIndex}].rating`, power.rating, 0, EXTENDED_MAX, true)}
-                        <textarea class="wod-field-input" rows="2" data-path="powerSets[${index}].powers[${powerIndex}].description">${escapeHtml(power.description || '')}</textarea>
-                        <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="powerSets[${index}].powers[${powerIndex}]">
+                        <textarea class="wod-field-input" rows="2" data-path="powerSets[${index}].powers[${powerIndex}].description" ${buildInteractionAttributes('edit')}>${escapeHtml(power.description || '')}</textarea>
+                        <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="powerSets[${index}].powers[${powerIndex}]" ${buildInteractionAttributes('edit')}>
                             Remove
                         </button>
                     </div>
                 `).join('')}
-                <button class="wod-mini-btn" data-action="add-row" data-template="power" data-path="powerSets[${index}].powers">
+                <button class="wod-mini-btn" data-action="add-row" data-template="power" data-path="powerSets[${index}].powers" ${buildInteractionAttributes('edit')}>
                     <i class="fa-solid fa-plus"></i> Add Power
                 </button>
             </div>
-            <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="powerSets[${index}]">
+            <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="powerSets[${index}]" ${buildInteractionAttributes('edit')}>
                 Remove Set
             </button>
         </div>
@@ -429,16 +435,16 @@ function renderEquipmentGroup(label, items, basePath) {
             ${(!items || items.length === 0) ? '<p class="wod-empty-hint">Nothing listed.</p>' : ''}
             ${(items || []).map((item, index) => `
                 <div class="wod-list-row" data-index="${index}">
-                    ${renderTextInput('Name', `${basePath}[${index}].name`, item.name, true)}
-                    ${renderTextInput('Type', `${basePath}[${index}].type`, item.type, true)}
-                    ${renderTextInput('Location', `${basePath}[${index}].location`, item.location, true)}
-                    <textarea class="wod-field-input" rows="2" data-path="${basePath}[${index}].description">${escapeHtml(item.description || '')}</textarea>
-                    <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="${basePath}[${index}]">
+                    ${renderTextInput('Name', `${basePath}[${index}].name`, item.name, { compact: true, mode: 'live' })}
+                    ${renderTextInput('Type', `${basePath}[${index}].type`, item.type, { compact: true, mode: 'live' })}
+                    ${renderTextInput('Location', `${basePath}[${index}].location`, item.location, { compact: true, mode: 'live' })}
+                    <textarea class="wod-field-input" rows="2" data-path="${basePath}[${index}].description" ${buildInteractionAttributes('live')}>${escapeHtml(item.description || '')}</textarea>
+                    <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="${basePath}[${index}]" ${buildInteractionAttributes('live')}>
                         Remove
                     </button>
                 </div>
             `).join('')}
-            <button class="wod-mini-btn" data-action="add-row" data-template="equipment" data-path="${basePath}">
+            <button class="wod-mini-btn" data-action="add-row" data-template="equipment" data-path="${basePath}" ${buildInteractionAttributes('live')}>
                 <i class="fa-solid fa-plus"></i> Add Item
             </button>
         </div>
@@ -455,7 +461,7 @@ function buildNotesContent(sheet) {
             ${renderTraitList('Flaws', flaws, 'flaws')}
         </div>
         <label class="wod-field-label">Story Notes</label>
-        <textarea class="wod-field-input" rows="4" data-path="notes" data-input-type="string-array">${escapeHtml(notes)}</textarea>
+        <textarea class="wod-field-input" rows="4" data-path="notes" data-input-type="string-array" ${buildInteractionAttributes('edit')}>${escapeHtml(notes)}</textarea>
     `;
 }
 
@@ -468,13 +474,13 @@ function renderTraitList(label, list, path) {
                 <div class="wod-list-row">
                     ${renderTextInput('Name', `${path}[${index}].name`, entry.name, true)}
                     ${renderNumberInput('Rating', `${path}[${index}].rating`, entry.rating, -5, 10, true)}
-                    <textarea class="wod-field-input" rows="2" data-path="${path}[${index}].description">${escapeHtml(entry.description || '')}</textarea>
-                    <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="${path}[${index}]">
+                    <textarea class="wod-field-input" rows="2" data-path="${path}[${index}].description" ${buildInteractionAttributes('edit')}>${escapeHtml(entry.description || '')}</textarea>
+                    <button class="wod-mini-btn wod-mini-btn--danger" data-action="remove-row" data-path="${path}[${index}]" ${buildInteractionAttributes('edit')}>
                         Remove
                     </button>
                 </div>
             `).join('')}
-            <button class="wod-mini-btn" data-action="add-row" data-template="${path === 'merits' ? 'merit' : 'flaw'}" data-path="${path}">
+            <button class="wod-mini-btn" data-action="add-row" data-template="${path === 'merits' ? 'merit' : 'flaw'}" data-path="${path}" ${buildInteractionAttributes('edit')}>
                 <i class="fa-solid fa-plus"></i> Add ${label.slice(0, -1)}
             </button>
         </div>
@@ -571,38 +577,83 @@ function renderEmptyState() {
     `;
 }
 
+function resolveInputOptions(rawOptions, defaults = {}) {
+    if (rawOptions && typeof rawOptions === 'object' && !Array.isArray(rawOptions)) {
+        return {
+            compact: Boolean(rawOptions.compact),
+            mode: rawOptions.mode || defaults.mode || 'edit'
+        };
+    }
+    return {
+        compact: Boolean(rawOptions),
+        mode: defaults.mode || 'edit'
+    };
+}
+
+function isInteractionLocked(mode = 'edit') {
+    return mode !== 'live' && !uiState.editMode;
+}
+
+function buildInteractionAttributes(mode = 'edit') {
+    const attrs = [`data-mode="${mode}"`];
+    if (isInteractionLocked(mode)) {
+        attrs.push('disabled');
+        attrs.push('data-locked="true"');
+    }
+    return attrs.join(' ');
+}
+
 function renderTextInput(label, path, value, compact = false) {
+    const options = resolveInputOptions(compact, { mode: 'edit' });
+    const lockAttrs = buildInteractionAttributes(options.mode);
     return `
         <label class="wod-field">
             <span class="wod-field-label">${label}</span>
-            <input class="wod-field-input" type="text" value="${escapeHtml(value ?? '')}" data-path="${path}" ${compact ? 'data-compact="true"' : ''}/>
+            <input class="wod-field-input" type="text" value="${escapeHtml(value ?? '')}" data-path="${path}" ${options.compact ? 'data-compact="true"' : ''} ${lockAttrs}/>
         </label>
     `;
 }
 
 function renderNumberInput(label, path, value, min = 0, max = 10, compact = false) {
+    const options = resolveInputOptions(compact, { mode: 'edit' });
     const safe = Number.isFinite(Number(value)) ? Number(value) : '';
+    const lockAttrs = buildInteractionAttributes(options.mode);
     return `
         <label class="wod-field">
             <span class="wod-field-label">${label}</span>
-            <input class="wod-field-input" type="number" data-input-type="number" data-min="${min}" data-max="${max}" value="${safe}" data-path="${path}" ${compact ? 'data-compact="true"' : ''}/>
+            <input class="wod-field-input" type="number" data-input-type="number" data-min="${min}" data-max="${max}" value="${safe}" data-path="${path}" ${options.compact ? 'data-compact="true"' : ''} ${lockAttrs}/>
         </label>
     `;
 }
 
 function renderDotTrack(path, value = 0, max = ATTRIBUTE_MAX, options = {}) {
     const safeValue = Number(value) || 0;
+    const mode = options.mode || 'edit';
+    const locked = isInteractionLocked(mode);
+    const variant = options.variant || null;
     const dots = [];
     for (let i = 1; i <= max; i++) {
         const active = i <= safeValue ? 'is-active' : '';
-        dots.push(`<button type="button" class="wod-dot ${active}" data-value="${i}" aria-label="${i} dots"></button>`);
+        const classes = ['wod-dot', active];
+        if (locked) {
+            classes.push('is-locked');
+        }
+        dots.push(`<button type="button" class="${classes.join(' ').trim()}" data-value="${i}" aria-label="${i} dots" ${locked ? 'disabled' : ''}></button>`);
     }
     const attrs = [
         `data-path="${path}"`,
         `data-max="${max}"`,
         `data-current="${safeValue}"`,
-        `data-resettable="${options.resettable === false ? 'false' : 'true'}"`
+        `data-resettable="${options.resettable === false ? 'false' : 'true'}"`,
+        `data-mode="${mode}"`
     ];
+    if (variant) {
+        attrs.push(`data-variant="${variant}"`);
+    }
+    if (locked) {
+        attrs.push('data-locked="true"');
+        attrs.push('title="Enable edit mode to adjust this track"');
+    }
     if (options.enforce) {
         attrs.push(`data-enforce="${options.enforce}"`);
     }
@@ -620,6 +671,7 @@ function ensureSheetEvents() {
         .on('blur', '.wod-field-input', handleFieldInputChange)
         .on('click', '.wod-mini-btn[data-action="add-row"]', handleAddRow)
         .on('click', '.wod-mini-btn[data-action="remove-row"]', handleRemoveRow)
+        .on('click', '[data-action="toggle-edit"]', handleToggleEdit)
         .on('click', '.wod-health-box', handleHealthClick)
         .on('click', '.wod-collapse-toggle', handleSectionToggle)
         .on('click', '[data-action="open-sync"]', handleOpenSync)
@@ -649,6 +701,10 @@ function handleDotTrackClick(event) {
     if (!sheetId || !$track.length) {
         return;
     }
+    const mode = $track.data('mode') || 'edit';
+    if (isInteractionLocked(mode)) {
+        return;
+    }
     const rawValue = Number($button.data('value')) || 0;
     const current = Number($track.data('current')) || 0;
     const max = Number($track.data('max')) || ATTRIBUTE_MAX;
@@ -674,6 +730,10 @@ function handleFieldInputChange(event) {
     if (!target.dataset.path) {
         return;
     }
+    const mode = target.dataset.mode || 'edit';
+    if (isInteractionLocked(mode)) {
+        return;
+    }
     const sheetId = $(target).closest('.wod-sheet-root').data('sheetId');
     if (!sheetId) {
         return;
@@ -695,6 +755,10 @@ function handleFieldInputChange(event) {
 function handleAddRow(event) {
     event.preventDefault();
     const $button = $(event.currentTarget);
+    const mode = $button.data('mode') || 'edit';
+    if (isInteractionLocked(mode)) {
+        return;
+    }
     const template = $button.data('template');
     const path = $button.data('path');
     const sheetId = $button.closest('.wod-sheet-root').data('sheetId');
@@ -717,9 +781,19 @@ function handleRemoveRow(event) {
     if (!sheetId || !path) {
         return;
     }
+    const mode = $(event.currentTarget).data('mode') || 'edit';
+    if (isInteractionLocked(mode)) {
+        return;
+    }
     applySheetUpdate(sheetId, draft => {
         removeAtPath(draft, path);
     });
+}
+
+function handleToggleEdit(event) {
+    event.preventDefault();
+    uiState.editMode = !uiState.editMode;
+    renderWodSheet();
 }
 
 function handleHealthClick(event) {
@@ -730,14 +804,32 @@ function handleHealthClick(event) {
     if (!sheetId || Number.isNaN(index)) {
         return;
     }
+    const mode = $button.data('mode') || 'edit';
+    if (isInteractionLocked(mode)) {
+        return;
+    }
     applySheetUpdate(sheetId, draft => {
         const track = draft?.advantages?.health;
         if (!Array.isArray(track) || !track[index]) {
             return;
         }
         const current = track[index].state || 'ok';
-        const nextIndex = (HEALTH_STATES.indexOf(current) + 1) % HEALTH_STATES.length;
-        track[index].state = HEALTH_STATES[nextIndex];
+        const currentIndex = HEALTH_STATES.indexOf(current);
+        const nextIndex = (currentIndex + 1) % HEALTH_STATES.length;
+        const nextState = HEALTH_STATES[nextIndex];
+        if (nextState === 'ok') {
+            track.forEach(level => {
+                level.state = 'ok';
+            });
+            return;
+        }
+        track.forEach((level, levelIndex) => {
+            if (levelIndex <= index) {
+                level.state = nextState;
+            } else if (level.state !== 'ok') {
+                level.state = 'ok';
+            }
+        });
     });
 }
 
