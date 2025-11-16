@@ -3,9 +3,13 @@
  * Handles all AI prompt generation for RPG tracker data
  */
 
-import { getContext } from '../../../../../../extensions.js';
-import { chat, getCurrentChatDetails } from '../../../../../../../script.js';
-import { extensionSettings, committedTrackerData, FEATURE_FLAGS } from '../../core/state.js';
+import { chat } from '../../../../../../../script.js';
+import {
+    extensionSettings,
+    committedTrackerData,
+    wodRuntimeState,
+    getActiveWodSheet
+} from '../../core/state.js';
 
 // Type imports
 /** @typedef {import('../../types/inventory.js').InventoryV2} InventoryV2 */
@@ -56,40 +60,338 @@ export function buildInventorySummary(inventory) {
     return 'None';
 }
 
+export const MAX_PROMPT_SHEETS = 3;
+export const MAX_PROMPT_DICE_LOG = 5;
+const MAX_NOTES_PER_SHEET = 4;
+const MAX_EQUIPMENT_ITEMS = 6;
+
+function stringifyForPrompt(value) {
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch (error) {
+        console.warn('[RPG Companion] Failed to stringify prompt payload', error);
+        return '[]';
+    }
+}
+
+function clipArray(values, limit) {
+    if (!Array.isArray(values)) {
+        return [];
+    }
+    if (!limit || values.length <= limit) {
+        return values.slice();
+    }
+    return values.slice(0, limit);
+}
+
+function isLikelyJsonArray(text) {
+    if (typeof text !== 'string') return false;
+    const trimmed = text.trim();
+    return trimmed.startsWith('[') && trimmed.endsWith(']');
+}
+
+function isLikelyJsonObject(text) {
+    if (typeof text !== 'string') return false;
+    const trimmed = text.trim();
+    return trimmed.startsWith('{') && trimmed.endsWith('}');
+}
+
+export function collectSheetsForPrompt(limit = MAX_PROMPT_SHEETS) {
+    const selected = [];
+    const seen = new Set();
+    const sheets = wodRuntimeState.sheets instanceof Map ? wodRuntimeState.sheets : new Map();
+
+    const pushSheet = (sheet) => {
+        if (sheet && sheet.id && !seen.has(sheet.id)) {
+            selected.push(sheet);
+            seen.add(sheet.id);
+        }
+    };
+
+    pushSheet(getActiveWodSheet());
+
+    const order = wodRuntimeState.sheetOrder || [];
+    order.some(sheetId => {
+        if (selected.length >= limit) {
+            return true;
+        }
+        const sheet = sheets.get(sheetId);
+        pushSheet(sheet);
+        return false;
+    });
+
+    return selected.slice(0, limit);
+}
+
+function pruneEmpty(value) {
+    if (Array.isArray(value)) {
+        const prunedArray = value
+            .map(item => pruneEmpty(item))
+            .filter(item => {
+                if (item === undefined || item === null) return false;
+                if (Array.isArray(item)) return item.length > 0;
+                if (typeof item === 'object') return Object.keys(item).length > 0;
+                return true;
+            });
+        return prunedArray;
+    }
+
+    if (value && typeof value === 'object') {
+        const prunedObject = {};
+        Object.entries(value).forEach(([key, entry]) => {
+            const pruned = pruneEmpty(entry);
+            if (pruned === undefined || pruned === null) {
+                return;
+            }
+            if (Array.isArray(pruned) && pruned.length === 0) {
+                return;
+            }
+            if (typeof pruned === 'object' && !Array.isArray(pruned) && Object.keys(pruned).length === 0) {
+                return;
+            }
+            prunedObject[key] = pruned;
+        });
+        return prunedObject;
+    }
+
+    return value;
+}
+
+function filterAbilityValues(record = {}) {
+    const filtered = {};
+    Object.entries(record).forEach(([key, value]) => {
+        const numeric = Number(value) || 0;
+        if (numeric > 0) {
+            filtered[key] = numeric;
+        }
+    });
+    return filtered;
+}
+
+export function serializeSheetForPrompt(sheet) {
+    if (!sheet) {
+        return null;
+    }
+    const meta = sheet.meta || {};
+    const traits = sheet.traits || {};
+    const abilities = traits.abilities || {};
+    const attributes = traits.attributes || {};
+    const advantages = sheet.advantages || {};
+    const equipment = sheet.equipment || {};
+
+    return pruneEmpty({
+        sheetId: sheet.id,
+        name: meta.name || sheet.id,
+        concept: meta.concept || null,
+        chronicle: meta.chronicle || null,
+        faction: meta.faction?.value || meta.faction?.type || null,
+        supernaturalType: meta.supernaturalType || meta.supernaturalSubtype || null,
+        nature: meta.nature || null,
+        demeanor: meta.demeanor || null,
+        notes: clipArray(Array.isArray(sheet.notes) ? sheet.notes : meta.notes || [], MAX_NOTES_PER_SHEET),
+        traits: {
+            attributes: {
+                physical: attributes.physical || {},
+                social: attributes.social || {},
+                mental: attributes.mental || {}
+            },
+            abilities: {
+                talents: filterAbilityValues(abilities.talents || {}),
+                skills: filterAbilityValues(abilities.skills || {}),
+                knowledges: filterAbilityValues(abilities.knowledges || {})
+            }
+        },
+        advantages: {
+            backgrounds: clipArray(advantages.backgrounds || [], MAX_EQUIPMENT_ITEMS).map(entry => ({
+                name: entry.name,
+                rating: Number(entry.rating) || 0,
+                description: entry.description || undefined
+            })),
+            virtues: advantages.virtues || undefined,
+            morality: advantages.morality || undefined,
+            willpower: advantages.willpower || undefined,
+            health: advantages.health || undefined,
+            resourcePools: clipArray(advantages.resourcePools || [], MAX_EQUIPMENT_ITEMS).map(pool => ({
+                name: pool.name,
+                type: pool.type,
+                capacity: pool.capacity,
+                current: pool.current,
+                notes: pool.notes || undefined
+            }))
+        },
+        powerSets: clipArray(sheet.powerSets || [], MAX_EQUIPMENT_ITEMS).map(set => pruneEmpty({
+            name: set.name,
+            category: set.category,
+            rating: set.rating,
+            tags: set.tags,
+            notes: set.notes,
+            powers: clipArray(set.powers || [], MAX_EQUIPMENT_ITEMS).map(power => pruneEmpty({
+                name: power.name,
+                rating: power.rating,
+                description: power.description,
+                tags: power.tags,
+                cost: power.cost
+            }))
+        })),
+        merits: clipArray(sheet.merits || [], MAX_EQUIPMENT_ITEMS),
+        flaws: clipArray(sheet.flaws || [], MAX_EQUIPMENT_ITEMS),
+        equipment: pruneEmpty({
+            inventory: clipArray(equipment.inventory || [], MAX_EQUIPMENT_ITEMS),
+            stored: clipArray(equipment.stored || [], MAX_EQUIPMENT_ITEMS),
+            assets: clipArray(equipment.assets || [], MAX_EQUIPMENT_ITEMS)
+        })
+    });
+}
+
+function buildCharacterSheetsBlock() {
+    const committed = committedTrackerData.userStats;
+    if (committed && isLikelyJsonArray(committed)) {
+        return committed.trim();
+    }
+    const sheets = collectSheetsForPrompt();
+    if (sheets.length === 0) {
+        return stringifyForPrompt([]);
+    }
+    const payload = sheets
+        .map(serializeSheetForPrompt)
+        .filter(Boolean);
+    return stringifyForPrompt(payload);
+}
+
+function buildSceneInfoBlock() {
+    const committed = committedTrackerData.infoBox;
+    if (committed && isLikelyJsonObject(committed)) {
+        return committed.trim();
+    }
+    if (wodRuntimeState.sceneInfo) {
+        return stringifyForPrompt(wodRuntimeState.sceneInfo);
+    }
+    const fallback = {
+        location: 'Unknown location',
+        time: 'Unset',
+        weather: null,
+        sceneAspects: [],
+        openThreads: [],
+        presentCharacters: []
+    };
+    return stringifyForPrompt(fallback);
+}
+
+function buildDiceLogBlock() {
+    const committed = committedTrackerData.characterThoughts;
+    if (committed && isLikelyJsonArray(committed)) {
+        return committed.trim();
+    }
+    const diceEntries = formatDiceLogEntries(wodRuntimeState.diceLog || []);
+    return stringifyForPrompt(diceEntries);
+}
+
+export function formatDiceLogEntries(entries, limit = MAX_PROMPT_DICE_LOG) {
+    return clipArray(entries || [], limit).map(entry => pruneEmpty({
+        id: entry.id,
+        sheetId: entry.sheetId || undefined,
+        sheetName: entry.sheetName || undefined,
+        pool: entry.poolLabel,
+        difficulty: entry.difficulty,
+        explode: entry.explode,
+        specialty: entry.specialtyApplies ? true : undefined,
+        willpower: entry.spendWillpower ? true : undefined,
+        successes: entry.successes,
+        outcome: entry.outcome,
+        rolls: entry.rolls,
+        timestamp: entry.timestamp,
+        notes: entry.notes || undefined
+    }));
+}
+
+function parseSceneInfoBlock(blockText) {
+    if (!blockText) {
+        return null;
+    }
+    try {
+        return JSON.parse(blockText);
+    } catch (error) {
+        return null;
+    }
+}
+
+function buildSheetSummary(sheetObject) {
+    if (!sheetObject) {
+        return null;
+    }
+    const attributes = sheetObject.traits?.attributes || {};
+    const advantages = sheetObject.advantages || {};
+    const willpower = advantages.willpower;
+    const resourcePools = advantages.resourcePools || [];
+    const primaryPool = resourcePools[0];
+
+    const lines = [];
+    lines.push(`${sheetObject.name || sheetObject.sheetId} (${sheetObject.sheetId}) - ${sheetObject.concept || 'No concept provided'}`);
+    const physical = attributes.physical || {};
+    const social = attributes.social || {};
+    const mental = attributes.mental || {};
+    lines.push(`Physical Str${physical.strength ?? 0}/Dex${physical.dexterity ?? 0}/Sta${physical.stamina ?? 0}. Social Cha${social.charisma ?? 0}/Man${social.manipulation ?? 0}/App${social.appearance ?? 0}. Mental Per${mental.perception ?? 0}/Int${mental.intelligence ?? 0}/Wit${mental.wits ?? 0}.`);
+    if (willpower) {
+        lines.push(`Willpower ${willpower.current ?? 0}/${willpower.permanent ?? 0}.`);
+    }
+    if (primaryPool) {
+        lines.push(`${primaryPool.name}: ${primaryPool.current ?? 0}/${primaryPool.capacity ?? 0}.`);
+    }
+    return lines.join(' ');
+}
+
+function buildSceneInfoSummary(sceneInfo) {
+    if (!sceneInfo) {
+        return 'Scene info not yet set.';
+    }
+    const parts = [];
+    if (sceneInfo.location) {
+        parts.push(`Location: ${sceneInfo.location}`);
+    }
+    if (sceneInfo.time) {
+        parts.push(`Time: ${sceneInfo.time}`);
+    }
+    if (sceneInfo.weather) {
+        parts.push(`Weather: ${sceneInfo.weather}`);
+    }
+    const aspects = Array.isArray(sceneInfo.sceneAspects) ? sceneInfo.sceneAspects : [];
+    if (aspects.length > 0) {
+        parts.push(`Aspects: ${aspects.join(', ')}`);
+    }
+    const threads = Array.isArray(sceneInfo.openThreads) ? sceneInfo.openThreads : [];
+    if (threads.length > 0) {
+        parts.push(`Open threads: ${threads.join('; ')}`);
+    }
+    const present = Array.isArray(sceneInfo.presentCharacters) ? sceneInfo.presentCharacters : [];
+    if (present.length > 0) {
+        const charSummaries = present.map(char => {
+            const bits = [char.name];
+            if (char.role) bits.push(`role: ${char.role}`);
+            if (char.status) bits.push(`status: ${char.status}`);
+            if (char.intent) bits.push(`intent: ${char.intent}`);
+            return bits.filter(Boolean).join(' | ');
+        });
+        parts.push(`Present: ${charSummaries.join(' || ')}`);
+    }
+    return parts.join(' ');
+}
+
+function buildDiceLogSummary(entries) {
+    if (!entries || entries.length === 0) {
+        return 'No WoD dice rolls logged yet.';
+    }
+    return entries.map(entry => {
+        const actor = entry.sheetName || entry.sheetId || 'Unknown character';
+        return `${actor} rolled ${entry.poolLabel || 'a pool'} at difficulty ${entry.difficulty}: ${entry.successes} successes (${entry.outcome}).`;
+    }).join(' ');
+}
+
 /**
  * Builds a dynamic attributes string based on configured RPG attributes.
  * Uses custom attribute names and values from classicStats.
  *
  * @returns {string} Formatted attributes string (e.g., "STR 10, DEX 12, INT 15, LVL 5")
  */
-function buildAttributesString() {
-    const trackerConfig = extensionSettings.trackerConfig;
-    const classicStats = extensionSettings.classicStats;
-    const userStatsConfig = trackerConfig?.userStats;
-
-    // Get enabled attributes from config
-    const rpgAttributes = userStatsConfig?.rpgAttributes || [
-        { id: 'str', name: 'STR', enabled: true },
-        { id: 'dex', name: 'DEX', enabled: true },
-        { id: 'con', name: 'CON', enabled: true },
-        { id: 'int', name: 'INT', enabled: true },
-        { id: 'wis', name: 'WIS', enabled: true },
-        { id: 'cha', name: 'CHA', enabled: true }
-    ];
-
-    const enabledAttributes = rpgAttributes.filter(attr => attr && attr.enabled && attr.name && attr.id);
-
-    // Build attributes string dynamically
-    const attributeParts = enabledAttributes.map(attr => {
-        const value = classicStats[attr.id] !== undefined ? classicStats[attr.id] : 10;
-        return `${attr.name} ${value}`;
-    });
-
-    // Add level at the end
-    attributeParts.push(`LVL ${extensionSettings.level}`);
-
-    return attributeParts.join(', ');
-}
 
 /**
  * Generates an example block showing current tracker states in markdown code blocks.
@@ -98,23 +400,33 @@ function buildAttributesString() {
  * @returns {string} Formatted example text with tracker data in code blocks
  */
 export function generateTrackerExample() {
-    let example = '';
+    const blocks = [];
 
-    // Use COMMITTED data for generation context, not displayed data
-    // Wrap each tracker section in markdown code blocks
-    if (extensionSettings.showUserStats && committedTrackerData.userStats) {
-        example += '```\n' + committedTrackerData.userStats + '\n```\n\n';
+    if (extensionSettings.showUserStats) {
+        blocks.push([
+            '```Character Sheets',
+            buildCharacterSheetsBlock(),
+            '```'
+        ].join('\n'));
     }
 
-    if (extensionSettings.showInfoBox && committedTrackerData.infoBox) {
-        example += '```\n' + committedTrackerData.infoBox + '\n```\n\n';
+    if (extensionSettings.showInfoBox) {
+        blocks.push([
+            '```Scene Info',
+            buildSceneInfoBlock(),
+            '```'
+        ].join('\n'));
     }
 
-    if (extensionSettings.showCharacterThoughts && committedTrackerData.characterThoughts) {
-        example += '```\n' + committedTrackerData.characterThoughts + '\n```';
+    if (extensionSettings.showCharacterThoughts) {
+        blocks.push([
+            '```Dice Log',
+            buildDiceLogBlock(),
+            '```'
+        ].join('\n'));
     }
 
-    return example.trim();
+    return blocks.join('\n\n').trim();
 }
 
 /**
@@ -125,183 +437,35 @@ export function generateTrackerExample() {
  * @returns {string} Formatted instruction text for the AI
  */
 export function generateTrackerInstructions(includeHtmlPrompt = true, includeContinuation = true) {
-    const userName = getContext().name1;
-    const classicStats = extensionSettings.classicStats;
-    const trackerConfig = extensionSettings.trackerConfig;
+    const hasSheets = !!extensionSettings.showUserStats;
+    const hasScene = !!extensionSettings.showInfoBox;
+    const hasDice = !!extensionSettings.showCharacterThoughts;
+    const hasAnyTrackers = hasSheets || hasScene || hasDice;
     let instructions = '';
 
-    // Check if any trackers are enabled
-    const hasAnyTrackers = extensionSettings.showUserStats || extensionSettings.showInfoBox || extensionSettings.showCharacterThoughts;
-
-    // Only add tracker instructions if at least one tracker is enabled
     if (hasAnyTrackers) {
-        // Universal instruction header
-        instructions += `\nAt the start of every reply, you must attach an update to the trackers in EXACTLY the same format as below, enclosed in separate Markdown code fences. Replace X with actual numbers (e.g., 69) and replace all [placeholders] with concrete in-world details that ${userName} perceives about the current scene and the present characters. Do NOT keep the brackets or placeholder text in your response. For example: [Location] becomes Forest Clearing, [Mood Emoji] becomes 😊. Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user's actions, the passage of time, and logical consequences:\n`;
+        instructions += `\nAt the start of every reply, output the enabled World of Darkness trackers exactly once before any narration. Each tracker must be a JSON code fence labeled with the section name (for example, \`\`\`Character Sheets ...\`\`\`). Copy the previous JSON when nothing changes so the extension stays authoritative, and only adjust the fields that the fiction actually moved.\n\n`;
 
-        // Add format specifications for each enabled tracker
-        if (extensionSettings.showUserStats) {
-            const userStatsConfig = trackerConfig?.userStats;
-            const enabledStats = userStatsConfig?.customStats?.filter(s => s && s.enabled && s.name) || [];
-
-            instructions += '```\n';
-            instructions += `${userName}'s Stats\n`;
-            instructions += '---\n';
-
-            // Add custom stats dynamically
-            for (const stat of enabledStats) {
-                instructions += `- ${stat.name}: X%\n`;
-            }
-
-            // Add status section if enabled
-            if (userStatsConfig?.statusSection?.enabled) {
-                const statusFields = userStatsConfig.statusSection.customFields || [];
-                const statusFieldsText = statusFields.map(f => `${f}`).join(', ');
-
-                if (userStatsConfig.statusSection.showMoodEmoji) {
-                    instructions += `Status: [Mood Emoji${statusFieldsText ? ', ' + statusFieldsText : ''}]\n`;
-                } else if (statusFieldsText) {
-                    instructions += `Status: [${statusFieldsText}]\n`;
-                }
-            }
-
-            // Add skills section if enabled
-            if (userStatsConfig?.skillsSection?.enabled) {
-                const skillFields = userStatsConfig.skillsSection.customFields || [];
-                const skillFieldsText = skillFields.map(f => `[${f}]`).join(', ');
-                instructions += `Skills: [${skillFieldsText || 'Skill1, Skill2, etc.'}]\n`;
-            }
-
-            // Add inventory format based on feature flag
-            if (FEATURE_FLAGS.useNewInventory) {
-                instructions += 'On Person: [Items currently carried/worn, or "None"]\n';
-                instructions += 'Stored - [Location Name]: [Items stored at this location]\n';
-                instructions += '(Add multiple "Stored - [Location]:" lines as needed for different storage locations)\n';
-                instructions += 'Assets: [Vehicles, property, major possessions, or "None"]\n';
-            } else {
-                // Legacy v1 format
-                instructions += 'Inventory: [Clothing/Armor, Inventory Items (list of important items, or "None")]\\n';
-            }
-
-            // Add quests section
-            instructions += 'Main Quests: [Short title of the currently active main quest (for example, "Save the world"), or "None"]\n';
-            instructions += 'Optional Quests: [Short titles of the currently active optional quests (for example, "Find Zandik\'s book"), or "None"]\n';
-
-            instructions += '```\n\n';
+        if (hasSheets) {
+            instructions += `- **Character Sheets (\`\`\`Character Sheets ...\`\`\`)** - Body is an array of sheet objects covering the active characters. Keep the canonical keys: \`sheetId\`, \`name\`, \`concept\`, \`chronicle\`, \`faction\`, \`traits.attributes\`, \`traits.abilities\`, \`advantages\` (backgrounds, virtues, morality, willpower, health track, and resourcePools), \`powerSets\`, \`merits\`, \`flaws\`, \`equipment\`, and \`notes\`. Dots are integers (0-5 unless the fiction justifies elder ratings), resource pools never drop below 0 or exceed capacity, and health states are limited to \`"ok"\`, \`"bashing"\`, \`"lethal"\`, or \`"aggravated"\`. Include only the characters who are present or mechanically relevant to the current beat so the block stays concise.\n\n`;
         }
 
-        if (extensionSettings.showInfoBox) {
-            const infoBoxConfig = trackerConfig?.infoBox;
-            const widgets = infoBoxConfig?.widgets || {};
-
-            instructions += '```\n';
-            instructions += 'Info Box\n';
-            instructions += '---\n';
-
-            // Add only enabled widgets
-            if (widgets.date?.enabled) {
-                instructions += 'Date: [Weekday, Month, Year]\n';
-            }
-            if (widgets.weather?.enabled) {
-                instructions += 'Weather: [Weather Emoji, Forecast]\n';
-            }
-            if (widgets.temperature?.enabled) {
-                const unit = widgets.temperature.unit === 'F' ? '°F' : '°C';
-                instructions += `Temperature: [Temperature in ${unit}]\n`;
-            }
-            if (widgets.time?.enabled) {
-                instructions += 'Time: [Time Start → Time End]\n';
-            }
-            if (widgets.location?.enabled) {
-                instructions += 'Location: [Location]\n';
-            }
-            if (widgets.recentEvents?.enabled) {
-                instructions += 'Recent Events: [Up to three past events leading to the ongoing scene (short descriptors with no details, for example, "last-night date with Mary")]\n';
-            }
-
-            instructions += '```\n\n';
+        if (hasScene) {
+            instructions += `- **Scene Info (\`\`\`Scene Info ...\`\`\`)** - Body is a single JSON object describing the environment and movers. Include keys such as \`location\`, \`time\`, \`weather\`, \`sceneAspects\` (array of short descriptors), \`openThreads\`, and \`presentCharacters\`. Each entry in \`presentCharacters\` should list \`name\`, \`sheetId\` when tracked, plus \`role\`, \`status\`, \`intent\`, and \`thoughts\` so the Storyteller understands goals and complications. Keep descriptions short, factual, and updated with every turn.\n\n`;
         }
 
-        if (extensionSettings.showCharacterThoughts) {
-            const presentCharsConfig = trackerConfig?.presentCharacters;
-            const enabledFields = presentCharsConfig?.customFields?.filter(f => f && f.enabled && f.name) || [];
-            const relationshipFields = presentCharsConfig?.relationshipFields || [];
-            const thoughtsConfig = presentCharsConfig?.thoughts;
-            const characterStats = presentCharsConfig?.characterStats;
-            const enabledCharStats = characterStats?.enabled && characterStats?.customStats?.filter(s => s && s.enabled && s.name) || [];
-
-            instructions += '```\n';
-            instructions += 'Present Characters\n';
-            instructions += '---\n';
-
-            // Build relationship placeholders (e.g., "Lover/Friend")
-            const relationshipPlaceholders = relationshipFields
-                .filter(r => r && r.trim())
-                .map(r => `${r}`)
-                .join('/');
-
-            // Build custom field placeholders (e.g., "[Appearance] | [Current Action]")
-            const fieldPlaceholders = enabledFields
-                .map(f => `[${f.name}]`)
-                .join(' | ');
-
-            // Character block format
-            instructions += `- [Name (do not include ${userName}; state "Unavailable" if no major characters are present in the scene)]\n`;
-
-            // Details line with emoji and custom fields
-            if (fieldPlaceholders) {
-                instructions += `Details: [Present Character's Emoji] | ${fieldPlaceholders}\n`;
-            } else {
-                instructions += `Details: [Present Character's Emoji]\n`;
-            }
-
-            // Relationship line (only if relationships are enabled)
-            if (relationshipPlaceholders) {
-                instructions += `Relationship: [(choose one: ${relationshipPlaceholders})]\n`;
-            }
-
-            // Stats line (if enabled)
-            if (enabledCharStats.length > 0) {
-                const statPlaceholders = enabledCharStats.map(s => `${s.name}: X%`).join(' | ');
-                instructions += `Stats: ${statPlaceholders}\n`;
-            }
-
-            // Thoughts line (if enabled)
-            if (thoughtsConfig?.enabled) {
-                const thoughtsName = thoughtsConfig.name || 'Thoughts';
-                const thoughtsDescription = thoughtsConfig.description || 'Internal monologue (in first person POV, up to three sentences long)';
-                instructions += `${thoughtsName}: [${thoughtsDescription}]\n`;
-            }
-
-            instructions += `- … (Repeat the format above for every other present major character)\n`;
-
-            instructions += '```\n\n';
+        if (hasDice) {
+            instructions += `- **Dice Log (\`\`\`Dice Log ...\`\`\`)** - Body is an array of recent roll summaries with \`id\`, \`sheetId\`, \`pool\`, \`difficulty\`, \`explode\`, \`willpower\`, \`successes\`, \`outcome\`, \`rolls\`, and any \`notes\`. Do **not** invent die results. When you need a fresh roll, emit a command like [[WOD-ROLL {"sheetId":"vtm-brujah-valeria","pool":"Dexterity + Drive","difficulty":7,"modifier":1,"willpower":false}]] and keep narrating. The extension replaces the tag with the authoritative outcome and appends it to the log, so copy the updated log back unchanged unless a new official roll just occurred.\n\n`;
         }
 
-        // Only add continuation instruction if includeContinuation is true
         if (includeContinuation) {
-            instructions += `After updating the trackers, continue directly from where the last message in the chat history left off. Ensure the trackers you provide naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as fatigue affecting the protagonist's performance, low hygiene influencing their social interactions, environmental factors shaping the scene, a character's emotional state coloring their responses, and so on. Remember, all bracketed placeholders (e.g., [Location], [Mood Emoji]) MUST be replaced with actual content without the square brackets.\n\n`;
+            instructions += `After the tracker fences, immediately continue the story, letting the updated dots, resources, and scene notes drive character behavior. Injuries, frenzies, empty Willpower, or tense relationships should all influence how you portray the cast.\n\n`;
         }
 
-        instructions += `Need an authoritative World of Darkness dice result? Emit a single line like [[WOD-ROLL {"sheetId":"<character id>","pool":"Dexterity + Drive","difficulty":6,"modifier":0,"willpower":false}]] in your response. The extension will roll the pool, replace the tag with the summary, and log it for later prompts. Use the character's sheetId (or omit to use the currently active sheet) and keep JSON values strict.\n\n`;
-
-        // Include attributes and dice roll only if there was a dice roll
-        if (extensionSettings.lastDiceRoll) {
-            const roll = extensionSettings.lastDiceRoll;
-            const attributesString = buildAttributesString();
-            instructions += `${userName}'s attributes: ${attributesString}\n`;
-            instructions += `${userName} rolled ${roll.total} on the last ${roll.formula} roll. Based on their attributes, decide whether they succeeded or failed the action they attempted.\n\n`;
-        }
+        instructions += `Never leave placeholders, never wrap the tracker block in commentary, and keep everything machine-parseable JSON.\n\n`;
     }
 
-    // Append HTML prompt if enabled AND includeHtmlPrompt is true
     if (extensionSettings.enableHtmlPrompt && includeHtmlPrompt) {
-        // Add newlines only if we had tracker instructions
-        if (hasAnyTrackers) {
-            instructions += ``;
-        } else {
-            instructions += `\n`;
-        }
-
         instructions += `If appropriate, include inline HTML, CSS, and JS elements for creative, visual storytelling throughout your response:
 - Use them liberally to depict any in-world content that can be visualized (screens, posters, books, signs, letters, logos, crests, seals, medallions, labels, etc.), with creative license for animations, 3D effects, pop-ups, dropdowns, websites, and so on.
 - Style them thematically to match the theme (e.g., sleek for sci-fi, rustic for fantasy), ensuring text is visible.
@@ -321,134 +485,43 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
  * @returns {string} Formatted contextual summary
  */
 export function generateContextualSummary() {
-    // Use COMMITTED data for generation context, not displayed data
-    const userName = getContext().name1;
-    let summary = '';
-
-    // Helper function to clean tracker data (remove code fences and separator lines)
-    const cleanTrackerData = (data) => {
-        if (!data) return '';
-        return data
-            .split('\n')
-            .filter(line => {
-                const trimmed = line.trim();
-                return trimmed &&
-                       !trimmed.startsWith('```') &&
-                       trimmed !== '---';
-            })
-            .join('\n');
-    };
-
-    // Add User Stats tracker data if enabled
-    if (extensionSettings.showUserStats && committedTrackerData.userStats) {
-        const cleanedStats = cleanTrackerData(committedTrackerData.userStats);
-        if (cleanedStats) {
-            summary += cleanedStats + '\n\n';
-        }
-    }
-
-    // Add Info Box tracker data if enabled
-    if (extensionSettings.showInfoBox && committedTrackerData.infoBox) {
-        const cleanedInfoBox = cleanTrackerData(committedTrackerData.infoBox);
-        if (cleanedInfoBox) {
-            summary += cleanedInfoBox + '\n\n';
-        }
-    }
-
-    // Add Present Characters tracker data if enabled
-    if (extensionSettings.showCharacterThoughts && committedTrackerData.characterThoughts) {
-        const cleanedThoughts = cleanTrackerData(committedTrackerData.characterThoughts);
-        if (cleanedThoughts) {
-            summary += cleanedThoughts + '\n\n';
-        }
-    }
-
-    // Include attributes and dice roll only if there was a dice roll
-    if (extensionSettings.lastDiceRoll) {
-        const roll = extensionSettings.lastDiceRoll;
-        const attributesString = buildAttributesString();
-        summary += `${userName}'s attributes: ${attributesString}\n`;
-        summary += `${userName} rolled ${roll.total} on the last ${roll.formula} roll. Based on their attributes, decide whether they succeeded or failed the action they attempted.\n\n`;
-    }
-
-    return summary.trim();
-}
-
-/**
- * Generates the RPG tracking prompt text (for backward compatibility with separate mode).
- * Uses COMMITTED data (not displayed data) for generation context.
- *
- * @returns {string} Full prompt text for separate tracker generation
- */
-export function generateRPGPromptText() {
-    // Use COMMITTED data for generation context, not displayed data
-    const userName = getContext().name1;
-
-    let promptText = '';
-
-    promptText += `Here are the previous trackers in the roleplay that you should consider when responding:\n`;
-    promptText += `<previous>\n`;
+    const sections = [];
 
     if (extensionSettings.showUserStats) {
-        if (committedTrackerData.userStats) {
-            promptText += `Last ${userName}'s Stats:\n${committedTrackerData.userStats}\n\n`;
-        } else {
-            promptText += `Last ${userName}'s Stats:\nNone - this is the first update.\n\n`;
-        }
-
-        // Add current quests to the previous data context
-        if (extensionSettings.quests) {
-            if (extensionSettings.quests.main && extensionSettings.quests.main !== 'None') {
-                promptText += `Main Quests: ${extensionSettings.quests.main}\n`;
-            }
-            if (extensionSettings.quests.optional && extensionSettings.quests.optional.length > 0) {
-                const optionalQuests = extensionSettings.quests.optional.filter(q => q && q !== 'None').join(', ');
-                promptText += `Optional Quests: ${optionalQuests || 'None'}\n`;
-            }
-            promptText += `\n`;
+        const sheetSummaries = collectSheetsForPrompt()
+            .map(serializeSheetForPrompt)
+            .filter(Boolean)
+            .map(buildSheetSummary)
+            .filter(Boolean);
+        if (sheetSummaries.length > 0) {
+            sections.push(`Character Sheets:
+${sheetSummaries.join('\n')}`);
         }
     }
 
     if (extensionSettings.showInfoBox) {
-        if (committedTrackerData.infoBox) {
-            promptText += `Last Info Box:\n${committedTrackerData.infoBox}\n\n`;
-        } else {
-            promptText += `Last Info Box:\nNone - this is the first update.\n\n`;
+        const sceneInfo = parseSceneInfoBlock(committedTrackerData.infoBox);
+        const sceneSummary = buildSceneInfoSummary(sceneInfo);
+        if (sceneSummary) {
+            sections.push(`Scene Info: ${sceneSummary}`);
         }
     }
 
     if (extensionSettings.showCharacterThoughts) {
-        if (committedTrackerData.characterThoughts) {
-            promptText += `Last Present Characters:\n${committedTrackerData.characterThoughts}\n`;
-        } else {
-            promptText += `Last Present Characters:\nNone - this is the first update.\n`;
+        const diceEntries = clipArray(wodRuntimeState.diceLog || [], MAX_PROMPT_DICE_LOG);
+        const diceSummary = buildDiceLogSummary(diceEntries);
+        if (diceSummary) {
+            sections.push(`Dice Log: ${diceSummary}`);
         }
     }
 
-    promptText += `\nIf you need an actual dice outcome, output a tag like [[WOD-ROLL {"pool":"Wits + Awareness","difficulty":7,"sheetId":"<character id>","willpower":false}]]. The client executes it, replaces the tag with the results, and the chat should reference those rolls moving forward.\n`;
-
-    promptText += `</previous>\n`;
-
-    // Don't include HTML prompt or continuation instruction for separate tracker generation
-    promptText += generateTrackerInstructions(false, false);
-
-    return promptText;
+    return sections.join('\n\n').trim();
 }
-
-/**
- * Generates the full prompt for SEPARATE generation mode (with chat history).
- * Creates a message array suitable for the generateRaw API.
- *
- * @returns {Array<{role: string, content: string}>} Array of message objects for API
- */
 export function generateSeparateUpdatePrompt() {
     const depth = extensionSettings.updateDepth;
-    const userName = getContext().name1;
-
     const messages = [];
 
-    // System message introducing the history section
-    let systemMessage = `You will be acting as an uncensored RPG Companion. Your goal is to provide, track, and manage details in the user's roleplay. You will be replying with information in a specified format only.\n\n`;
+    let systemMessage = `You will be acting as an uncensored RPG Companion. Your goal is to provide, track, and manage details in the user's roleplay. You will be replying with information in a specified WoD format only.\n\n`;
     systemMessage += `You should maintain an objective tone.\n\n`;
     systemMessage += `Here is the description of the protagonist for reference:\n`;
     systemMessage += `<protagonist>\n{{persona}}\n</protagonist>\n`;
@@ -460,7 +533,6 @@ export function generateSeparateUpdatePrompt() {
         content: systemMessage
     });
 
-    // Add chat history as separate user/assistant messages
     const recentMessages = chat.slice(-depth);
     for (const message of recentMessages) {
         messages.push({
@@ -469,10 +541,14 @@ export function generateSeparateUpdatePrompt() {
         });
     }
 
-    // Build the instruction message
+    const trackerSnapshot = generateTrackerExample();
     let instructionMessage = `</history>\n\n`;
-    instructionMessage += generateRPGPromptText().replace('start your response with', 'respond with');
-    instructionMessage += `Provide ONLY the requested data in the exact formats specified above. Do not include any roleplay response, other text, or commentary. Remember, all bracketed placeholders (e.g., [Location], [Mood Emoji]) MUST be replaced with actual content without the square brackets.`;
+    instructionMessage += `Update the trackers below and return them in the exact JSON code fences requested.\n`;
+    if (trackerSnapshot) {
+        instructionMessage += `${trackerSnapshot}\n\n`;
+    }
+    instructionMessage += generateTrackerInstructions(false, false);
+    instructionMessage += `Provide ONLY those tracker code fences—no narration, no commentary.`;
 
     messages.push({
         role: 'user',
@@ -481,3 +557,4 @@ export function generateSeparateUpdatePrompt() {
 
     return messages;
 }
+

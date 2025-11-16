@@ -189,6 +189,20 @@ Cons:
 - The LLM can request authoritative rolls mid-response by emitting a single tag such as `[[WOD-ROLL {"sheetId":"vtm-brujah-valeria","pool":"Dexterity + Brawl","difficulty":6,"willpower":false}]]`. The extension executes the pool, replaces the tag with a human-readable summary, and records the outcome so future prompts stay consistent.
 - Logs persist per chat via `chat_metadata.rpg_companion_v20`, so dice references remain authoritative across swipes, reloads, and manual JSON edits.
 
+### Prompt Schema & Context Blocks
+
+- Every model response now starts with up to three labeled JSON code fences: `Character Sheets`, `Scene Info`, and `Dice Log`. These blocks mirror the in-panel WoD sheet, the current scene tracker, and the authoritative dice history so SillyTavern can round-trip edits with zero loss.
+- **Character Sheets** is an array of sheet objects following the schema in `docs/wod-spec.md`. Include only the characters currently in play, keep dots as integers (0–5 unless an elder explicitly exceeds it), never let resource pools exceed capacity, and stick to the standard health states (`ok`, `bashing`, `lethal`, `aggravated`).
+- **Scene Info** is a single object with keys such as `location`, `time`, `weather`, `sceneAspects`, `openThreads`, and `presentCharacters`. Each present character entry pairs the WoD sheet ID (when available) with role/status/intent/thoughts notes so the model and UI stay synchronized.
+- **Dice Log** is an array of recent roll summaries (`id`, `sheetId`, `pool`, `difficulty`, `explode`, `willpower`, `successes`, `outcome`, `rolls`, `notes`). Treat it as read-only unless a new `[[WOD-ROLL {...}]]` tag was executed during the response—the extension replaces the tag with the official summary and rewrites the log before the next prompt injection.
+- Together and Separate generation modes both inject these same blocks plus a concise textual summary, so the LLM always reads the exact data that the sidebar renders and vice versa.
+
+### Tracker Synchronization
+
+- The extension now sanitizes and applies the `Character Sheets` JSON emitted by the model to the active WoD sheets. Values are clamped to v20 ranges, health states are validated, and changes are stored as chat overrides so they persist per conversation without touching the on-disk sheet files.
+- `Scene Info` is also parsed and saved in chat metadata. Updating the JSON silently refreshes the sidebar scene card without surfacing any extra text inside the roleplay transcript.
+- `Dice Log` remains authoritative on the client: the model simply copies the latest block, and the UI regenerates it from the tracked rolls after every response. Whenever the assistant needs a new outcome it must call the `[[WOD-ROLL {...}]]` tool; the user never sees these bookkeeping updates in chat.
+
 ### Editing Tracker Data
 
 You can edit most fields by clicking on them:

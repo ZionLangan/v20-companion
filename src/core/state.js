@@ -155,6 +155,7 @@ export const wodRuntimeState = {
     sheetOrder: [],
     activeSheetId: null,
     diceLog: [],
+    sceneInfo: null,
     diceDefaults: { ...DEFAULT_WOD_DICE_DEFAULTS },
     chatOverrides: new Map(),
     dirtySheets: new Set()
@@ -484,6 +485,21 @@ export function getActiveWodSheet() {
     return wodRuntimeState.sheets.get(wodRuntimeState.activeSheetId) || null;
 }
 
+export function getWodSceneInfo() {
+    if (!wodRuntimeState.sceneInfo) {
+        return null;
+    }
+    return JSON.parse(JSON.stringify(wodRuntimeState.sceneInfo));
+}
+
+export function setWodSceneInfo(info) {
+    if (!info) {
+        wodRuntimeState.sceneInfo = null;
+        return;
+    }
+    wodRuntimeState.sceneInfo = JSON.parse(JSON.stringify(info));
+}
+
 export function getWodSheet(sheetId) {
     if (!sheetId) {
         return null;
@@ -689,6 +705,7 @@ export function setWodChatOverrides(overrides = {}) {
 export function clearWodChatOverrides() {
     wodRuntimeState.chatOverrides = new Map();
     wodRuntimeState.dirtySheets = new Set();
+    wodRuntimeState.sceneInfo = null;
     reapplyWodOverrides();
 }
 

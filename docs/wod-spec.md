@@ -223,6 +223,13 @@ export const extensionState = {
 - **Saving** - When the UI edits a trait, mark the sheet dirty for the current chat and call `saveChatData`. Offer a "Sync to File" action that surfaces the merged JSON for manual copy/paste back into the filesystem.
 - **Selection** - The UI should expose a dropdown or tab list sourced from `sheetOrder`. Switching sheets updates `activeSheetId` and re-renders traits/dice options.
 
+### 4.1 LLM Tracker Sync (Step 7)
+
+1. **Character Sheets block** – The parser reads the JSON array emitted in the `Character Sheets` fence, sanitizes it (clamping dots/resources, validating health states, trimming strings), and deep-merges it into the active sheets via `recordWodChatOverride`. Only sheet IDs already registered in the chat are accepted, so stray data cannot inject new actors.
+2. **Scene Info block** – The single JSON object is normalized (location/time/weather/aspects/present characters) and written to `wodRuntimeState.sceneInfo`, which is persisted in `chat_metadata.rpg_companion_v20`. Clearing fields is as simple as returning empty arrays/objects; the sidebar updates silently and no text leaks into the roleplay transcript.
+3. **Dice Log block** – The client remains authoritative. Models should copy the log verbatim, and every `[[WOD-ROLL {...}]]` call rewrites the log from the true roll history before the next prompt injection. The parser ignores any attempt to fabricate results.
+4. **Prompt snapshots** – After applying edits, the extension re-serializes the active sheets, scene info, and dice log into the same JSON blocks. These canonical strings populate `committedTrackerData` so both Together and Separate modes send the exact state that the UI displays.
+
 ---
 
 ## 5. Dice Pool Specification

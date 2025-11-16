@@ -12,11 +12,19 @@ import {
     isGenerating,
     lastActionWasSwipe,
     setIsGenerating,
-    setLastActionWasSwipe
+    setLastActionWasSwipe,
+    wodRuntimeState,
+    setWodSceneInfo
 } from '../../core/state.js';
 import { saveChatData } from '../../core/persistence.js';
-import { generateSeparateUpdatePrompt } from './promptBuilder.js';
+import {
+    generateSeparateUpdatePrompt,
+    collectSheetsForPrompt,
+    serializeSheetForPrompt,
+    formatDiceLogEntries
+} from './promptBuilder.js';
 import { parseResponse, parseUserStats } from './parser.js';
+import { sanitizeSheetsFromPrompt, applySheetsFromPrompt, sanitizeSceneInfo } from './wodSync.js';
 import { renderUserStats } from '../rendering/userStats.js';
 import { renderInfoBox } from '../rendering/infoBox.js';
 import { renderThoughts } from '../rendering/thoughts.js';
@@ -133,8 +141,26 @@ export async function updateRPGData(renderUserStats, renderInfoBox, renderThough
         if (response) {
             // console.log('[RPG Companion] Raw AI response:', response);
             const parsedData = parseResponse(response);
-            // console.log('[RPG Companion] Parsed data:', parsedData);
-            // console.log('[RPG Companion] parsedData.userStats:', parsedData.userStats ? parsedData.userStats.substring(0, 100) + '...' : 'null');
+            const hadSceneBlock = parsedData.sceneInfoPayload !== undefined;
+            const sanitizedSheets = sanitizeSheetsFromPrompt(parsedData.sheetPayloads);
+            if (sanitizedSheets.length > 0) {
+                applySheetsFromPrompt(sanitizedSheets);
+            }
+            if (hadSceneBlock) {
+                const cleanedSceneInfo = sanitizeSceneInfo(parsedData.sceneInfoPayload);
+                setWodSceneInfo(cleanedSceneInfo);
+            }
+            const sheetBlock = buildCharacterSheetSnapshot();
+            if (sheetBlock) {
+                parsedData.userStats = sheetBlock;
+            }
+            const sceneBlock = buildSceneInfoSnapshot();
+            if (sceneBlock) {
+                parsedData.infoBox = sceneBlock;
+            } else if (hadSceneBlock) {
+                parsedData.infoBox = '{}';
+            }
+            parsedData.characterThoughts = buildDiceLogSnapshot();
 
             // DON'T update lastGeneratedData here - it should only reflect the data
             // from the assistant message the user replied to, not auto-generated updates
@@ -236,4 +262,27 @@ export async function updateRPGData(renderUserStats, renderInfoBox, renderThough
         // console.log('[RPG Companion] 🔄 Tracker generation complete - resetting lastActionWasSwipe to false');
         setLastActionWasSwipe(false);
     }
+}
+
+function buildCharacterSheetSnapshot() {
+    const sheets = collectSheetsForPrompt();
+    const payload = sheets
+        .map(serializeSheetForPrompt)
+        .filter(Boolean);
+    if (payload.length === 0) {
+        return JSON.stringify([], null, 2);
+    }
+    return JSON.stringify(payload, null, 2);
+}
+
+function buildSceneInfoSnapshot() {
+    if (!wodRuntimeState.sceneInfo) {
+        return null;
+    }
+    return JSON.stringify(wodRuntimeState.sceneInfo, null, 2);
+}
+
+function buildDiceLogSnapshot() {
+    const payload = formatDiceLogEntries(wodRuntimeState.diceLog || []);
+    return JSON.stringify(payload, null, 2);
 }

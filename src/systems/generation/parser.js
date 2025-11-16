@@ -145,119 +145,103 @@ export function parseResponse(responseText) {
     const result = {
         userStats: null,
         infoBox: null,
-        characterThoughts: null
+        characterThoughts: null,
+        sheetPayloads: undefined,
+        sceneInfoPayload: undefined,
+        diceLogPayload: undefined
     };
 
-    // DEBUG: Log full response for troubleshooting
     debugLog('[RPG Parser] ==================== PARSING AI RESPONSE ====================');
     debugLog('[RPG Parser] Response length:', responseText.length + ' chars');
     debugLog('[RPG Parser] First 500 chars:', responseText.substring(0, 500));
 
-    // Remove content inside thinking tags first (model's internal reasoning)
-    // This prevents parsing code blocks from the model's thinking process
     let cleanedResponse = responseText.replace(/<think>[\s\S]*?<\/think>/gi, '');
     cleanedResponse = cleanedResponse.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
     debugLog('[RPG Parser] Removed thinking tags, new length:', cleanedResponse.length + ' chars');
 
-    // Extract code blocks
-    const codeBlockRegex = /```([^`]+)```/g;
+    const codeBlockRegex = /```([\s\S]*?)```/g;
     const matches = [...cleanedResponse.matchAll(codeBlockRegex)];
-
     debugLog('[RPG Parser] Found', matches.length + ' code blocks');
 
-    for (let i = 0; i < matches.length; i++) {
-        const match = matches[i];
-        const content = match[1].trim();
+    matches.forEach((match, index) => {
+        const raw = match[1].trim();
+        const { label, body } = extractLabeledBlock(raw);
+        const normalizedLabel = (label || '').toLowerCase();
+        debugLog(`[RPG Parser] --- Code Block ${index + 1} --- Label: ${normalizedLabel || 'unknown'}`);
 
-        debugLog(`[RPG Parser] --- Code Block ${i + 1} ---`);
-        debugLog('[RPG Parser] First 300 chars:', content.substring(0, 300));
-
-        // Check if this is a combined code block with multiple sections
-        const hasMultipleSections = (
-            content.match(/Stats\s*\n\s*---/i) &&
-            (content.match(/Info Box\s*\n\s*---/i) || content.match(/Present Characters\s*\n\s*---/i))
-        );
-
-        if (hasMultipleSections) {
-            // Split the combined code block into individual sections
-            debugLog('[RPG Parser] ✓ Found combined code block with multiple sections');
-
-            // Extract User Stats section
-            const statsMatch = content.match(/(User )?Stats\s*\n\s*---[\s\S]*?(?=\n\s*\n\s*(Info Box|Present Characters)|$)/i);
-            if (statsMatch && !result.userStats) {
-                result.userStats = stripBrackets(statsMatch[0].trim());
-                debugLog('[RPG Parser] ✓ Extracted Stats from combined block');
-            }
-
-            // Extract Info Box section
-            const infoBoxMatch = content.match(/Info Box\s*\n\s*---[\s\S]*?(?=\n\s*\n\s*Present Characters|$)/i);
-            if (infoBoxMatch && !result.infoBox) {
-                result.infoBox = stripBrackets(infoBoxMatch[0].trim());
-                debugLog('[RPG Parser] ✓ Extracted Info Box from combined block');
-            }
-
-            // Extract Present Characters section
-            const charactersMatch = content.match(/Present Characters\s*\n\s*---[\s\S]*$/i);
-            if (charactersMatch && !result.characterThoughts) {
-                result.characterThoughts = stripBrackets(charactersMatch[0].trim());
-                debugLog('[RPG Parser] ✓ Extracted Present Characters from combined block');
-            }
-        } else {
-            // Handle separate code blocks with flexible pattern matching
-            // Match Stats section - flexible patterns
-            const isStats =
-                content.match(/Stats\s*\n\s*---/i) ||
-                content.match(/User Stats\s*\n\s*---/i) ||
-                content.match(/Player Stats\s*\n\s*---/i) ||
-                // Fallback: look for stat keywords without strict header
-                (content.match(/Health:\s*\d+%/i) && content.match(/Energy:\s*\d+%/i));
-
-            // Match Info Box section - flexible patterns
-            const isInfoBox =
-                content.match(/Info Box\s*\n\s*---/i) ||
-                content.match(/Scene Info\s*\n\s*---/i) ||
-                content.match(/Information\s*\n\s*---/i) ||
-                // Fallback: look for info box keywords
-                (content.match(/Date:/i) && content.match(/Location:/i) && content.match(/Time:/i));
-
-            // Match Present Characters section - flexible patterns
-            const isCharacters =
-                content.match(/Present Characters\s*\n\s*---/i) ||
-                content.match(/Characters\s*\n\s*---/i) ||
-                content.match(/Character Thoughts\s*\n\s*---/i) ||
-                // Fallback: look for new multi-line format patterns
-                (content.match(/^-\s+\w+/m) && content.match(/Details:/i));
-
-            if (isStats && !result.userStats) {
-                result.userStats = stripBrackets(content);
-                debugLog('[RPG Parser] ✓ Matched: Stats section');
-            } else if (isInfoBox && !result.infoBox) {
-                result.infoBox = stripBrackets(content);
-                debugLog('[RPG Parser] ✓ Matched: Info Box section');
-            } else if (isCharacters && !result.characterThoughts) {
-                result.characterThoughts = stripBrackets(content);
-                debugLog('[RPG Parser] ✓ Matched: Present Characters section');
-                debugLog('[RPG Parser] Full content:', content);
-            } else {
-                debugLog('[RPG Parser] ✗ No match - checking patterns:');
-                debugLog('[RPG Parser]   - Has "Stats\\n---"?', !!content.match(/Stats\s*\n\s*---/i));
-                debugLog('[RPG Parser]   - Has stat keywords?', !!(content.match(/Health:\s*\d+%/i) && content.match(/Energy:\s*\d+%/i)));
-                debugLog('[RPG Parser]   - Has "Info Box\\n---"?', !!content.match(/Info Box\s*\n\s*---/i));
-                debugLog('[RPG Parser]   - Has info keywords?', !!(content.match(/Date:/i) && content.match(/Location:/i)));
-                debugLog('[RPG Parser]   - Has "Present Characters\\n---"?', !!content.match(/Present Characters\s*\n\s*---/i));
-                debugLog('[RPG Parser]   - Has new format ("- Name" + "Details:")?', !!(content.match(/^-\s+\w+/m) && content.match(/Details:/i)));
-            }
+        if (!result.userStats && normalizedLabel === 'character sheets') {
+            result.userStats = body;
+            return;
         }
-    }
+        if (!result.infoBox && normalizedLabel === 'scene info') {
+            result.infoBox = body;
+            return;
+        }
+        if (!result.characterThoughts && normalizedLabel === 'dice log') {
+            result.characterThoughts = body;
+            return;
+        }
+
+        const trimmed = raw.trim();
+        if (!result.userStats && trimmed.startsWith('[')) {
+            result.userStats = trimmed;
+        } else if (!result.infoBox && trimmed.startsWith('{')) {
+            result.infoBox = trimmed;
+        } else if (!result.characterThoughts && trimmed.startsWith('[')) {
+            result.characterThoughts = trimmed;
+        }
+    });
+
+    result.sheetPayloads = result.userStats ? parseJsonArray(result.userStats) : undefined;
+    result.sceneInfoPayload = result.infoBox ? parseJsonObject(result.infoBox) : undefined;
+    result.diceLogPayload = result.characterThoughts ? parseJsonArray(result.characterThoughts) : undefined;
 
     debugLog('[RPG Parser] ==================== PARSE RESULTS ====================');
-    debugLog('[RPG Parser] Found Stats:', !!result.userStats);
-    debugLog('[RPG Parser] Found Info Box:', !!result.infoBox);
-    debugLog('[RPG Parser] Found Characters:', !!result.characterThoughts);
+    debugLog('[RPG Parser] Found Character Sheets:', !!result.userStats);
+    debugLog('[RPG Parser] Found Scene Info:', !!result.infoBox);
+    debugLog('[RPG Parser] Found Dice Log:', !!result.characterThoughts);
     debugLog('[RPG Parser] =======================================================');
 
     return result;
 }
+
+function parseJsonArray(block) {
+    if (!block || typeof block !== 'string') {
+        return [];
+    }
+    try {
+        const data = JSON.parse(block);
+        return Array.isArray(data) ? data : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function parseJsonObject(block) {
+    if (!block || typeof block !== 'string') {
+        return null;
+    }
+    try {
+        const data = JSON.parse(block);
+        return data && typeof data === 'object' ? data : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function extractLabeledBlock(raw = '') {
+    if (!raw) {
+        return { label: '', body: '' };
+    }
+    const firstBreak = raw.indexOf('\n');
+    if (firstBreak === -1) {
+        return { label: '', body: raw.trim() };
+    }
+    const header = raw.substring(0, firstBreak).trim();
+    const body = raw.substring(firstBreak + 1).trim();
+    return { label: header, body };
+}
+
 
 /**
  * Parses user stats from the text and updates the extensionSettings.

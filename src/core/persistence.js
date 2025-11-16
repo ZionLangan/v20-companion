@@ -18,7 +18,8 @@ import {
     setActiveWodSheetId,
     setWodChatOverrides,
     clearWodChatOverrides,
-    serializeWodChatOverrides
+    serializeWodChatOverrides,
+    setWodSceneInfo
 } from './state.js';
 import { migrateInventory } from '../utils/migration.js';
 import { validateStoredInventory, cleanItemString } from '../utils/security.js';
@@ -576,7 +577,8 @@ function buildWodChatMetadata() {
         activeSheetId: extensionSettings.wod.activeSheetId || wodRuntimeState.activeSheetId || null,
         sheetOrder: [...wodRuntimeState.sheetOrder],
         sheetOverrides: serializeWodChatOverrides(),
-        diceLog: cloneDiceLogEntries(wodRuntimeState.diceLog)
+        diceLog: cloneDiceLogEntries(wodRuntimeState.diceLog),
+        sceneInfo: wodRuntimeState.sceneInfo ? JSON.parse(JSON.stringify(wodRuntimeState.sceneInfo)) : null
     };
 }
 
@@ -594,6 +596,7 @@ function applyWodChatMetadata(payload) {
     if (payload.activeSheetId) {
         setActiveWodSheetId(payload.activeSheetId);
     }
+    setWodSceneInfo(payload.sceneInfo || null);
 }
 
 function cloneDiceLogEntries(entries) {
