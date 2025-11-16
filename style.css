@@ -6727,14 +6727,17 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     resize: vertical;
 }
 
-.wod-field-input[disabled] {
-    opacity: 0.55;
+.wod-field-input:disabled,
+.wod-field textarea:disabled {
     cursor: not-allowed;
+    opacity: 1;
+    color: var(--rpg-text);
+    -webkit-text-fill-color: var(--rpg-text);
+    background: var(--SmartThemeBlurTintColor, rgba(0,0,0,0.3));
 }
 
 .wod-mini-btn[disabled],
 .wod-toolbar-btn[disabled] {
-    opacity: 0.4;
     cursor: not-allowed;
     pointer-events: none;
 }
@@ -6789,12 +6792,7 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 }
 
 .wod-dot.is-locked {
-    opacity: 0.35;
     cursor: not-allowed;
-}
-
-.wod-dot-track[data-locked="true"] {
-    opacity: 0.7;
 }
 
 .wod-health-track {

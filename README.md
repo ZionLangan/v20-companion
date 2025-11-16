@@ -14,7 +14,8 @@ The v20 overhaul replaces the generic tracker panels with a fully structured WoD
 
 - The sheet opens in **view mode** so you can reference mechanics without worrying about stray clicks. Hit the **Edit Sheet** button in the toolbar to unlock structural edits (attributes, abilities, backgrounds, powers, etc.). Inventory rows and live resources stay editable even while the rest of the sheet is locked.
 - Health levels now behave like the printed tracker: clicking any level cycles through Bashing -> Lethal -> Aggravated damage while automatically filling every box up to that point. Click the same level again to clear all wounds back to "ok".
-- Willpower (current) and every resource pool render as a single dot track. Filled dots show the current amount, greyed dots show the maximum capacity, and clicking a dot immediately sets the pool to that value.
+- Willpower uses the same single-track display as blood pools, so filled dots equal current points and grey dots show the permanent cap.
+- Every other resource pool renders as a single dot track: filled dots show the current amount, greyed dots show remaining capacity, and clicking a dot immediately sets the pool to that value.
 
 ### Manual JSON Sync
 

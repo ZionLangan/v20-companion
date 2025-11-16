@@ -14,6 +14,12 @@ import { saveChatData, saveSettings } from '../../core/persistence.js';
 const ATTRIBUTE_MAX = 5;
 const EXTENDED_MAX = 10;
 const HEALTH_STATES = ['ok', 'bashing', 'lethal', 'aggravated'];
+const HEALTH_GLYPHS = {
+    ok: '',
+    bashing: '/',
+    lethal: 'X',
+    aggravated: '*'
+};
 
 const uiState = {
     syncPanelSheet: null,
@@ -218,10 +224,11 @@ function renderTrackersCard(sheet) {
                 <div class="wod-grid wod-grid--two wod-essentials-primary">
                     <div>
                         <h5>Willpower</h5>
-                        <label class="wod-field-label">Permanent</label>
-                        ${renderDotTrack('advantages.willpower.permanent', willpower.permanent, EXTENDED_MAX, { enforce: 'willpower-permanent' })}
-                        <label class="wod-field-label">Current</label>
-                        ${renderDotTrack('advantages.willpower.current', willpower.current, willpowerCap, { enforce: 'willpower-current', mode: 'live', variant: 'resource' })}
+                        <div class="wod-resource-track">
+                            <span class="wod-resource-track__value">${Number(willpower.current) || 0}/${Number(willpower.permanent) || 0}</span>
+                            ${renderDotTrack('advantages.willpower.current', willpower.current, willpowerCap, { enforce: 'willpower-current', mode: 'live', variant: 'resource' })}
+                        </div>
+                        ${renderNumberInput('Permanent Rating', 'advantages.willpower.permanent', willpower.permanent, 0, EXTENDED_MAX, true)}
                         <label class="wod-field-label">Morality / Path</label>
                         <div class="wod-morality-row">
                             ${renderTextInput('Path', 'advantages.morality.type', morality.type, true)}
@@ -329,7 +336,7 @@ function renderHealthTrack(levels = []) {
 
 function renderHealthLevel(level, index) {
     const state = level.state || 'ok';
-    const glyph = state === 'ok' ? '' : state === 'bashing' ? '/' : state === 'lethal' ? 'X' : '*';
+    const glyph = getHealthGlyph(state);
     return `
         <button class="wod-health-box" data-index="${index}" data-level-label="${level.level}" data-state="${state}" data-mode="live">
             <span class="wod-health-box__label">${escapeHtml(level.level)}</span>
@@ -716,6 +723,7 @@ function handleDotTrackClick(event) {
     nextValue = Math.max(0, Math.min(max, nextValue));
     const path = $track.data('path');
     const enforce = $track.data('enforce');
+    updateDotTrackPreview($track, nextValue, max);
     applySheetUpdate(sheetId, draft => {
         if (enforce === 'willpower-current') {
             const perm = Number(draft?.advantages?.willpower?.permanent) || 0;
@@ -808,28 +816,14 @@ function handleHealthClick(event) {
     if (isInteractionLocked(mode)) {
         return;
     }
+    const $track = $button.closest('.wod-health-track');
+    previewHealthTrack($track, index);
     applySheetUpdate(sheetId, draft => {
         const track = draft?.advantages?.health;
         if (!Array.isArray(track) || !track[index]) {
             return;
         }
-        const current = track[index].state || 'ok';
-        const currentIndex = HEALTH_STATES.indexOf(current);
-        const nextIndex = (currentIndex + 1) % HEALTH_STATES.length;
-        const nextState = HEALTH_STATES[nextIndex];
-        if (nextState === 'ok') {
-            track.forEach(level => {
-                level.state = 'ok';
-            });
-            return;
-        }
-        track.forEach((level, levelIndex) => {
-            if (levelIndex <= index) {
-                level.state = nextState;
-            } else if (level.state !== 'ok') {
-                level.state = 'ok';
-            }
-        });
+        applyHealthTrackState(track, index);
     });
 }
 
@@ -901,6 +895,47 @@ function applySheetUpdate(sheetId, mutator) {
     renderWodSheet();
 }
 
+function updateDotTrackPreview($track, value, max) {
+    if (!$track || !$track.length) {
+        return;
+    }
+    const safe = Math.max(0, Math.min(max, value));
+    $track.attr('data-current', safe);
+    $track.data('current', safe);
+    $track.find('.wod-dot').each((_, element) => {
+        const dotValue = Number(element.dataset.value) || (_ + 1);
+        if (dotValue <= safe) {
+            element.classList.add('is-active');
+        } else {
+            element.classList.remove('is-active');
+        }
+    });
+    const displayMax = Number($track.data('max')) || max || 0;
+    const $value = $track.siblings('.wod-resource-track__value').first();
+    if ($value && $value.length) {
+        $value.text(`${safe}/${displayMax}`);
+    }
+}
+
+function previewHealthTrack($track, index) {
+    if (!$track || !$track.length || Number.isNaN(index)) {
+        return;
+    }
+    const states = [];
+    $track.find('.wod-health-box').each((_, element) => {
+        states.push(element.dataset.state || 'ok');
+    });
+    const nextStates = computeNextHealthStates(states, index);
+    $track.find('.wod-health-box').each((i, element) => {
+        const state = nextStates[i] || 'ok';
+        element.dataset.state = state;
+        const glyphNode = element.querySelector('.wod-health-box__glyph');
+        if (glyphNode) {
+            glyphNode.textContent = getHealthGlyph(state);
+        }
+    });
+}
+
 function setValueByPath(target, path, value) {
     const { container, key } = getOrCreatePath(target, path);
     container[key] = value;
@@ -962,6 +997,33 @@ function resolveSegment(segment) {
 
 function cloneSheet(sheet) {
     return JSON.parse(JSON.stringify(sheet));
+}
+
+function computeNextHealthStates(states, index) {
+    if (!Array.isArray(states) || states.length === 0 || index < 0 || index >= states.length) {
+        return states || [];
+    }
+    const current = states[index] || 'ok';
+    const currentIndex = HEALTH_STATES.indexOf(current);
+    const nextState = HEALTH_STATES[(currentIndex + 1) % HEALTH_STATES.length] || 'ok';
+    if (nextState === 'ok') {
+        return states.map(() => 'ok');
+    }
+    return states.map((state, stateIndex) => (stateIndex <= index ? nextState : 'ok'));
+}
+
+function applyHealthTrackState(track, index) {
+    const states = track.map(level => level.state || 'ok');
+    const nextStates = computeNextHealthStates(states, index);
+    nextStates.forEach((state, stateIndex) => {
+        if (track[stateIndex]) {
+            track[stateIndex].state = state;
+        }
+    });
+}
+
+function getHealthGlyph(state) {
+    return HEALTH_GLYPHS[state] ?? '';
 }
 
 function buildTemplate(template) {
