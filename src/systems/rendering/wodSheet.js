@@ -2,6 +2,7 @@ import {
     extensionSettings,
     wodRuntimeState,
     $userStatsContainer,
+    $charactersContainer,
     getActiveWodSheet,
     getWodSheet,
     setActiveWodSheetId,
@@ -10,9 +11,13 @@ import {
     isWodSheetDirty,
     getPersonaLink,
     setPersonaLink,
-    removePersonaLink
+    removePersonaLink,
+    upsertWodSheet,
+    upsertWodSheetDigest
 } from '../../core/state.js';
 import { saveChatData, saveSettings } from '../../core/persistence.js';
+import { loadBundledSheets, computeSheetHash } from '../../core/sheets.js';
+import { extensionName } from '../../core/config.js';
 import { this_chid, characters } from '../../../../../../../script.js';
 import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 
@@ -30,7 +35,8 @@ const uiState = {
     syncPanelSheet: null,
     logFilter: 'active',
     sectionToggles: new Map(),
-    editMode: false
+    editMode: false,
+    lastReloadSummary: null
 };
 
 /**
@@ -69,7 +75,8 @@ export function renderWodSheet() {
 
     const sheet = getActiveWodSheet();
     const dirty = sheet ? isWodSheetDirty(sheet.id) : false;
-    const personaQuickbar = renderPersonaQuickbar();
+    const personas = getActivePersonaEntries();
+    const personaQuickbar = renderPersonaQuickbar(personas);
     const html = `
         <div class="wod-sheet-root" data-sheet-id="${sheet?.id || ''}" data-edit-mode="${uiState.editMode ? 'on' : 'off'}">
             ${renderCharacterToolbar(sheet, dirty)}
@@ -81,6 +88,7 @@ export function renderWodSheet() {
     `;
 
     $userStatsContainer.html(html);
+    renderCharactersTab(personas);
     ensureSheetEvents();
 }
 
@@ -127,8 +135,8 @@ function renderCharacterToolbar(sheet, dirty) {
     `;
 }
 
-function renderPersonaQuickbar() {
-    const personas = getActivePersonaEntries();
+function renderPersonaQuickbar(personaList = null) {
+    const personas = Array.isArray(personaList) ? personaList : getActivePersonaEntries();
     if (personas.length === 0) {
         return '';
     }
@@ -145,6 +153,81 @@ function renderPersonaQuickbar() {
     `;
 }
 
+function renderCharactersTab(personas = []) {
+    if (!$charactersContainer || $charactersContainer.length === 0) {
+        return;
+    }
+    const rows = personas.length > 0
+        ? personas.map(renderPersonaRow).join('')
+        : '<p class="wod-empty-hint">No SillyTavern personas detected for this chat. Open or create a persona first.</p>';
+    const reloadSummary = renderReloadSummary();
+    $charactersContainer.html(`
+        <section class="wod-card wod-characters-card">
+            <header class="wod-card-header">
+                <div>
+                    <h4>Characters</h4>
+                    <p>All personas in the current chat. Metadata links are read-only; edit them via Persona Manager.</p>
+                </div>
+                <div class="wod-characters-actions">
+                    <button class="wod-mini-btn" data-action="reload-sheets">
+                        <i class="fa-solid fa-rotate"></i> Reload Sheets
+                    </button>
+                    <button class="wod-mini-btn" data-action="import-sheet-global">
+                        <i class="fa-solid fa-file-import"></i> Import Sheet
+                    </button>
+                </div>
+            </header>
+            ${reloadSummary}
+            <div class="wod-persona-panel__rows wod-persona-panel__rows--tab">
+                ${rows}
+            </div>
+            <footer class="wod-card-footer">
+                <p class="wod-characters-hint">
+                    To bind a persona, open it in the Persona Manager and add <code>{"rpg_companion_v20":{"sheetId":"your-sheet-id"}}</code> to its Metadata block.
+                    Use tags like <code>wod-sheet:vtm-brujah-valeria</code> if you prefer tag-based linking.
+                </p>
+            </footer>
+        </section>
+    `);
+}
+
+function renderReloadSummary() {
+    const summary = uiState.lastReloadSummary || wodRuntimeState.lastSheetRefresh;
+    if (!summary) {
+        return '';
+    }
+    const changed = summary.changedSheetIds || [];
+    const added = summary.addedSheetIds || [];
+    const removed = summary.removedSheetIds || [];
+    const hasChanges = changed.length > 0 || added.length > 0 || removed.length > 0;
+    const when = new Date(summary.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const changeText = hasChanges
+        ? [
+            changed.length ? `${changed.length} updated (${formatSheetNames(changed)})` : '',
+            added.length ? `${added.length} added (${formatSheetNames(added)})` : '',
+            removed.length ? `${removed.length} removed (${removed.join(', ')})` : ''
+        ].filter(Boolean).join(' • ')
+        : 'No differences detected.';
+    const badge = summary.source === 'manual' ? 'Manual Reload' : 'Startup';
+    return `
+        <div class="wod-reload-banner" data-source="${badge}">
+            <strong>${badge}</strong>
+            <span>Last check ${when} — ${changeText}</span>
+        </div>
+    `;
+}
+
+function formatSheetNames(sheetIds = []) {
+    if (!Array.isArray(sheetIds) || sheetIds.length === 0) {
+        return '';
+    }
+    const labels = sheetIds.map(sheetId => {
+        const sheet = getWodSheet(sheetId);
+        return sheet?.meta?.name || sheetId;
+    });
+    return labels.join(', ');
+}
+
 function renderPersonaRow(persona) {
     const selectOptions = buildPersonaSelectOptions(persona.sheetId);
     const missingOption = persona.sheetId && !persona.sheetExists
@@ -158,6 +241,10 @@ function renderPersonaRow(persona) {
     const warning = persona.sheetId && !persona.sheetExists
         ? `<span class="wod-persona-warning">Sheet missing</span>`
         : '';
+    const selectDisabled = persona.linkSource === 'metadata' ? 'disabled aria-disabled="true"' : '';
+    const selectLockAttr = persona.linkSource === 'metadata' ? 'data-lock="metadata"' : '';
+    const sourceBadge = renderPersonaSourceBadge(persona);
+    const sourceNote = renderPersonaSourceNote(persona);
     return `
         <div class="wod-persona-row">
             <div class="wod-persona-row__label">
@@ -165,18 +252,47 @@ function renderPersonaRow(persona) {
                 ${sheetBadge}
                 ${warning}
             </div>
+            <div class="wod-persona-row__meta">
+                ${sourceBadge}
+                ${sourceNote}
+            </div>
             <div class="wod-persona-row__controls">
-                <select class="wod-persona-select" data-persona="${escapeHtml(persona.key)}">
+                <select class="wod-persona-select" data-persona="${escapeHtml(persona.key)}" ${selectDisabled} ${selectLockAttr}>
                     <option value="">No sheet linked</option>
                     ${missingOption}
                     ${selectOptions}
                 </select>
-                <button class="${buttonClasses}" data-action="activate-persona-sheet" data-persona="${escapeHtml(persona.key)}" ${buttonDisabled}>
+                <button class="${buttonClasses}" data-action="activate-persona-sheet" data-persona="${escapeHtml(persona.key)}" data-sheet="${escapeHtml(persona.sheetId || '')}" ${buttonDisabled}>
                     Open
                 </button>
             </div>
         </div>
     `;
+}
+
+function renderPersonaSourceBadge(persona) {
+    const source = persona.linkSource || 'none';
+    switch (source) {
+        case 'metadata':
+            return `<span class="wod-persona-source wod-persona-source--metadata" title="${persona.metadataPath ? `Linked via ${escapeHtml(persona.metadataPath)}` : 'Linked via persona metadata'}">Metadata</span>`;
+        case 'manual':
+            return '<span class="wod-persona-source wod-persona-source--manual">Manual</span>';
+        case 'auto':
+            return `<span class="wod-persona-source wod-persona-source--auto" title="${escapeHtml(persona.autoReason || 'Matched by name')}">Auto-match</span>`;
+        case 'none':
+        default:
+            return '<span class="wod-persona-source wod-persona-source--none">Unlinked</span>';
+    }
+}
+
+function renderPersonaSourceNote(persona) {
+    if (persona.linkSource === 'metadata' && persona.metadataPath) {
+        return `<span class="wod-persona-note">${escapeHtml(persona.metadataPath)}</span>`;
+    }
+    if (persona.linkSource === 'auto' && persona.autoReason) {
+        return `<span class="wod-persona-note">${escapeHtml(persona.autoReason)}</span>`;
+    }
+    return '';
 }
 
 function buildPersonaSelectOptions(selectedId) {
@@ -198,19 +314,24 @@ function getActivePersonaEntries() {
         if (!character) {
             return;
         }
-        const personaKey = character.avatar;
+        const personaKey = resolvePersonaKey(character);
         if (!personaKey || seen.has(personaKey)) {
             return;
         }
-        const link = getPersonaLink(personaKey);
-        const sheetId = link?.sheetId || null;
+        const metadataLink = extractSheetFromMetadata(character);
+        const manualLink = personaKey ? getPersonaLink(personaKey) : null;
+        const autoLink = (!metadataLink && !manualLink) ? autoMatchSheet(character) : null;
+        const sheetId = metadataLink?.sheetId || manualLink?.sheetId || autoLink?.sheetId || null;
         const sheet = sheetId ? getWodSheet(sheetId) : null;
         seen.set(personaKey, {
             key: personaKey,
             name: character.name || 'Persona',
             sheetId,
             sheetName: sheet?.meta?.name || sheet?.meta?.concept || sheetId || '',
-            sheetExists: !!sheet
+            sheetExists: !!sheet,
+            linkSource: metadataLink ? 'metadata' : manualLink ? 'manual' : autoLink ? 'auto' : 'none',
+            metadataPath: metadataLink?.path || null,
+            autoReason: autoLink?.reason || null
         });
     });
     return Array.from(seen.values());
@@ -228,6 +349,127 @@ function getCharactersInCurrentChat() {
         }
     }
     return personas;
+}
+
+function resolvePersonaKey(character) {
+    if (!character) {
+        return null;
+    }
+    return character.avatar || character.characterId || character.id || character.name || null;
+}
+
+function extractSheetFromMetadata(character) {
+    const metadata = parsePersonaMetadata(character?.metadata);
+    const candidates = [];
+    if (metadata) {
+        candidates.push({
+            path: 'metadata.rpg_companion_v20.sheetId',
+            value: metadata?.rpg_companion_v20?.sheetId
+        });
+        candidates.push({
+            path: 'metadata.rpgCompanion.sheetId',
+            value: metadata?.rpgCompanion?.sheetId
+        });
+        candidates.push({
+            path: 'metadata.rpgCompanionSheet',
+            value: metadata?.rpgCompanionSheet
+        });
+        candidates.push({
+            path: `metadata.extensions["${extensionName}"].sheetId`,
+            value: metadata?.extensions?.[extensionName]?.sheetId
+        });
+        candidates.push({
+            path: 'metadata.extensions.v20.sheetId',
+            value: metadata?.extensions?.v20?.sheetId
+        });
+        candidates.push({
+            path: 'metadata.sheetId',
+            value: metadata?.sheetId
+        });
+        candidates.push({
+            path: 'metadata.wodSheetId',
+            value: metadata?.wodSheetId
+        });
+        for (const candidate of candidates) {
+            if (typeof candidate.value === 'string' && candidate.value.trim().length > 0) {
+                return {
+                    sheetId: candidate.value.trim(),
+                    path: candidate.path
+                };
+            }
+        }
+    }
+    const tagSheet = extractSheetFromTags(character?.tags);
+    if (tagSheet) {
+        return {
+            sheetId: tagSheet,
+            path: 'tags[wod-sheet]'
+        };
+    }
+    return null;
+}
+
+function parsePersonaMetadata(raw) {
+    if (!raw) {
+        return null;
+    }
+    if (typeof raw === 'object') {
+        return raw;
+    }
+    if (typeof raw === 'string') {
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            console.warn('[RPG Companion] Failed to parse persona metadata JSON:', error);
+            return null;
+        }
+    }
+    return null;
+}
+
+function extractSheetFromTags(tags) {
+    if (!Array.isArray(tags)) {
+        return null;
+    }
+    for (const rawTag of tags) {
+        if (typeof rawTag !== 'string') {
+            continue;
+        }
+        const normalized = rawTag.trim();
+        const match = normalized.match(/^(?:wod[-_]?sheet|sheet)\s*[:=]\s*(.+)$/i);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+    return null;
+}
+
+function autoMatchSheet(character) {
+    const normalizedName = normalizeName(character?.name);
+    if (!normalizedName) {
+        return null;
+    }
+    const matches = [];
+    wodRuntimeState.sheets.forEach((sheet, sheetId) => {
+        const sheetName = normalizeName(sheet?.meta?.name);
+        if (sheetName && sheetName === normalizedName) {
+            matches.push({ sheetId, label: sheet?.meta?.name || sheetId });
+        }
+    });
+    if (matches.length === 1) {
+        return {
+            sheetId: matches[0].sheetId,
+            reason: `Matches ${matches[0].label}`
+        };
+    }
+    return null;
+}
+
+function normalizeName(value) {
+    if (!value) {
+        return '';
+    }
+    return String(value).trim().toLowerCase();
 }
 
 function renderSheetContent(sheet) {
@@ -610,18 +852,24 @@ function renderSyncPanel(sheet) {
     }
     const json = JSON.stringify(sheet, null, 2);
     return `
-        <section class="wod-card wod-sync-panel">
+        <section class="wod-card wod-sync-panel" data-sheet="${escapeHtml(sheet.id)}">
             <header class="wod-card-header">
                 <h4>Sync with File</h4>
                 <button class="wod-mini-btn" data-action="close-sync">Close</button>
             </header>
             <p class="wod-sync-help">
-                Copy this JSON into <code>sheets/${escapeHtml(sheet.id)}.json</code> (or your custom sheet file) with a text editor, then refresh SillyTavern.
+                Export the JSON to edit it in your text editor, then use Import JSON or the "Reload Sheets" button in the Characters tab to bring file changes back in.
             </p>
             <textarea class="wod-sync-output" readonly>${escapeHtml(json)}</textarea>
             <div class="wod-sync-actions">
                 <button class="wod-toolbar-btn" data-action="copy-sync">
                     <i class="fa-solid fa-copy"></i> Copy JSON
+                </button>
+                <button class="wod-toolbar-btn" data-action="download-sync">
+                    <i class="fa-solid fa-download"></i> Download JSON
+                </button>
+                <button class="wod-toolbar-btn" data-action="import-sync">
+                    <i class="fa-solid fa-file-import"></i> Import JSON
                 </button>
             </div>
         </section>
@@ -689,7 +937,7 @@ function renderDiceLogSection(sheet) {
 function renderEmptyState() {
     return `
         <section class="wod-card wod-empty">
-            <p>No WoD sheets are loaded. Add JSON files under the <code>sheets/</code> directory or import a sheet via SillyTavern, then refresh.</p>
+            <p>No WoD sheets are loaded. Add JSON files under the <code>sheets/</code> directory or use the <strong>Import Sheet</strong> button inside the Characters tab, then reload.</p>
         </section>
     `;
 }
@@ -778,27 +1026,36 @@ function renderDotTrack(path, value = 0, max = ATTRIBUTE_MAX, options = {}) {
 }
 
 function ensureSheetEvents() {
-    if (!$userStatsContainer || $userStatsContainer.data('wod-sheet-bound')) {
-        return;
+    if ($userStatsContainer && !$userStatsContainer.data('wod-sheet-bound')) {
+        $userStatsContainer
+            .on('change', '.wod-character-select', handleCharacterSelect)
+            .on('change', '.wod-persona-select', handlePersonaSelectChange)
+            .on('click', '[data-action="activate-persona-sheet"]', handlePersonaActivate)
+            .on('click', '.wod-dot-track button', handleDotTrackClick)
+            .on('change', '.wod-field-input', handleFieldInputChange)
+            .on('blur', '.wod-field-input', handleFieldInputChange)
+            .on('click', '.wod-mini-btn[data-action="add-row"]', handleAddRow)
+            .on('click', '.wod-mini-btn[data-action="remove-row"]', handleRemoveRow)
+            .on('click', '[data-action="toggle-edit"]', handleToggleEdit)
+            .on('click', '.wod-health-box', handleHealthClick)
+            .on('click', '.wod-collapse-toggle', handleSectionToggle)
+            .on('click', '[data-action="open-sync"]', handleOpenSync)
+            .on('click', '[data-action="close-sync"]', handleCloseSync)
+            .on('click', '[data-action="copy-sync"]', handleCopySync)
+            .on('click', '[data-action="download-sync"]', handleDownloadSync)
+            .on('click', '[data-action="import-sync"]', handleImportSync)
+            .on('click', '[data-action="revert-sheet"]', handleRevertSheet)
+            .on('change', '.wod-log-filter', handleLogFilterChange);
+        $userStatsContainer.data('wod-sheet-bound', true);
     }
-    $userStatsContainer
-        .on('change', '.wod-character-select', handleCharacterSelect)
-        .on('change', '.wod-persona-select', handlePersonaSelectChange)
-        .on('click', '[data-action="activate-persona-sheet"]', handlePersonaActivate)
-        .on('click', '.wod-dot-track button', handleDotTrackClick)
-        .on('change', '.wod-field-input', handleFieldInputChange)
-        .on('blur', '.wod-field-input', handleFieldInputChange)
-        .on('click', '.wod-mini-btn[data-action="add-row"]', handleAddRow)
-        .on('click', '.wod-mini-btn[data-action="remove-row"]', handleRemoveRow)
-        .on('click', '[data-action="toggle-edit"]', handleToggleEdit)
-        .on('click', '.wod-health-box', handleHealthClick)
-        .on('click', '.wod-collapse-toggle', handleSectionToggle)
-        .on('click', '[data-action="open-sync"]', handleOpenSync)
-        .on('click', '[data-action="close-sync"]', handleCloseSync)
-        .on('click', '[data-action="copy-sync"]', handleCopySync)
-        .on('click', '[data-action="revert-sheet"]', handleRevertSheet)
-        .on('change', '.wod-log-filter', handleLogFilterChange);
-    $userStatsContainer.data('wod-sheet-bound', true);
+    if ($charactersContainer && !$charactersContainer.data('wod-characters-bound')) {
+        $charactersContainer
+            .on('change', '.wod-persona-select', handlePersonaSelectChange)
+            .on('click', '[data-action="activate-persona-sheet"]', handlePersonaActivate)
+            .on('click', '[data-action="reload-sheets"]', handleReloadSheetsFromDisk)
+            .on('click', '[data-action="import-sheet-global"]', handleGlobalSheetImport);
+        $charactersContainer.data('wod-characters-bound', true);
+    }
 }
 
 function handleCharacterSelect(event) {
@@ -815,6 +1072,10 @@ function handleCharacterSelect(event) {
 function handlePersonaSelectChange(event) {
     const personaKey = event.currentTarget?.dataset?.persona;
     if (!personaKey) {
+        return;
+    }
+    if (event.currentTarget.dataset.lock === 'metadata') {
+        notify('warning', 'Edit the persona metadata inside SillyTavern to change this link.');
         return;
     }
     const sheetId = event.currentTarget.value;
@@ -839,12 +1100,114 @@ function handlePersonaActivate(event) {
     if (!personaKey) {
         return;
     }
-    const link = getPersonaLink(personaKey);
-    const sheetId = link?.sheetId;
+    let sheetId = $(event.currentTarget).data('sheet');
+    if (!sheetId) {
+        const persona = getActivePersonaEntries().find(entry => entry.key === personaKey);
+        sheetId = persona?.sheetId;
+    }
     if (!sheetId || !wodRuntimeState.sheets.has(sheetId)) {
+        notify('warning', 'No sheet linked to this persona.');
         return;
     }
     setActiveWodSheetId(sheetId);
+    saveSettings();
+    renderWodSheet();
+}
+
+function handleDownloadSync(event) {
+    event.preventDefault();
+    const $panel = $(event.currentTarget).closest('.wod-sync-panel');
+    const sheetId = $panel.data('sheet');
+    const sheet = sheetId ? getWodSheet(sheetId) : null;
+    if (!sheet) {
+        return;
+    }
+    const json = JSON.stringify(sheet, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${sheetId}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function handleImportSync(event) {
+    event.preventDefault();
+    const $panel = $(event.currentTarget).closest('.wod-sync-panel');
+    const sheetId = $panel.data('sheet');
+    const payload = await requestJsonFile();
+    if (!payload) {
+        return;
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(payload.text);
+    } catch (error) {
+        notify('error', 'Invalid JSON file. Please select a WoD sheet JSON.');
+        return;
+    }
+    if (!parsed || typeof parsed !== 'object' || !parsed.id) {
+        notify('error', 'Imported JSON must contain an "id" field.');
+        return;
+    }
+    if (sheetId && parsed.id !== sheetId) {
+        notify('error', 'This sync panel only accepts JSON for the active sheet.');
+        return;
+    }
+    upsertWodSheet(parsed);
+    registerCustomSheetDigest(parsed, 'import');
+    saveSettings();
+    notify('success', `Imported ${parsed.meta?.name || parsed.id} from JSON.`);
+    renderWodSheet();
+}
+
+async function handleGlobalSheetImport(event) {
+    event.preventDefault();
+    const payload = await requestJsonFile();
+    if (!payload) {
+        return;
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(payload.text);
+    } catch (error) {
+        notify('error', 'Invalid JSON file. Please select a WoD sheet JSON.');
+        return;
+    }
+    if (!parsed || typeof parsed !== 'object' || !parsed.id) {
+        notify('error', 'Imported JSON must contain an "id" field.');
+        return;
+    }
+    upsertWodSheet(parsed);
+    registerCustomSheetDigest(parsed, 'import');
+    saveSettings();
+    notify('success', `Imported ${parsed.meta?.name || parsed.id}.`);
+    renderWodSheet();
+}
+
+async function handleReloadSheetsFromDisk(event) {
+    event.preventDefault();
+    const $button = $(event.currentTarget);
+    $button.prop('disabled', true).addClass('is-busy');
+    try {
+        const result = await loadBundledSheets({ source: 'manual' });
+        uiState.lastReloadSummary = {
+            timestamp: Date.now(),
+            changedSheetIds: result.changedSheetIds || [],
+            addedSheetIds: result.addedSheetIds || [],
+            removedSheetIds: result.removedSheetIds || []
+        };
+        saveSettings();
+        notify('success', 'Reloaded sheets from disk.');
+    } catch (error) {
+        console.error('[RPG Companion] Failed to reload sheets:', error);
+        notify('error', 'Could not reload sheets. Check console for details.');
+    } finally {
+        $button.prop('disabled', false).removeClass('is-busy');
+    }
     renderWodSheet();
 }
 
@@ -1145,6 +1508,58 @@ function resolveSegment(segment) {
 
 function cloneSheet(sheet) {
     return JSON.parse(JSON.stringify(sheet));
+}
+
+function notify(type, message) {
+    if (typeof toastr !== 'undefined' && toastr && typeof toastr[type] === 'function') {
+        toastr[type](message);
+        return;
+    }
+    const fallback = type === 'error' ? 'error' : (type === 'warning' ? 'warn' : 'log');
+    console[fallback](`[RPG Companion] ${message}`);
+}
+
+function registerCustomSheetDigest(sheet, source = 'custom') {
+    if (!sheet || !sheet.id) {
+        return;
+    }
+    const hash = computeSheetHash(sheet);
+    upsertWodSheetDigest(sheet.id, {
+        hash,
+        source,
+        file: null,
+        lastLoaded: Date.now()
+    });
+}
+
+function requestJsonFile() {
+    return new Promise(resolve => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json,.json';
+        input.style.display = 'none';
+        input.addEventListener('change', () => {
+            const [file] = input.files || [];
+            if (!file) {
+                input.remove();
+                resolve(null);
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+                resolve({ name: file.name, text: reader.result });
+                input.remove();
+            };
+            reader.onerror = () => {
+                notify('error', 'Failed to read JSON file.');
+                input.remove();
+                resolve(null);
+            };
+            reader.readAsText(file);
+        }, { once: true });
+        document.body.appendChild(input);
+        input.click();
+    });
 }
 
 function computeNextHealthStates(states, index) {

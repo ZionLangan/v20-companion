@@ -9,7 +9,7 @@ The v20 overhaul replaces the generic tracker panels with a fully structured WoD
 - Load multiple JSON sheets from `sheets/` and swap between them via the new character selector.
 - Edit Attributes, Abilities, Backgrounds, Virtues, Willpower, resource pools, health states, powers, merits/flaws, equipment, and notes directly inside the sidebar. All controls enforce WoD dot/box limits.
 - Every edit is tracked per chat via SillyTavern persistence (dirty sheets are flagged with a “Chat override” pill). Dice rolls launched from the modal automatically appear in the built-in dice log panel so both you and the LLM can reference authoritative results.
-- Link SillyTavern personas to sheets so the characters currently present in a chat surface their WoD trackers automatically.
+- The **Characters** tab lists every SillyTavern persona that is currently in the chat. Each dropdown auto-selects the correct sheet by reading the persona’s metadata (`rpg_companion_v20.sheetId`, `extensions["third-party/v20-companion"].sheetId`, or a `wod-sheet:` tag), while still allowing manual overrides for edge cases.
 
 ### Editing & Resource Tracking
 
@@ -18,19 +18,31 @@ The v20 overhaul replaces the generic tracker panels with a fully structured WoD
 - Willpower uses the same single-track display as blood pools, so filled dots equal current points and grey dots show the permanent cap.
 - Every other resource pool renders as a single dot track: filled dots show the current amount, greyed dots show remaining capacity, and clicking a dot immediately sets the pool to that value.
 
-### Persona Linking
+### Persona Linking & Characters Tab
 
-- The **Personas in Chat** panel (beneath the character toolbar) lists every SillyTavern persona currently in the conversation—single chats show one persona, group chats show every member.  
-- Use each persona's dropdown to bind one of your WoD sheets or to unlink it. The **Open** button instantly switches the sidebar to that persona’s assigned sheet.
-- Persona bindings are tracked globally; once you link Valeria’s sheet, any chat where her SillyTavern persona appears will automatically expose that quick selector.
+- The **Characters** tab now mirrors the Personas panel under the sheet toolbar, showing every SillyTavern persona that is currently in the chat (group chats show all members). Each row displays the linked sheet, the linking source (metadata/manual/auto-match), and a quick **Open** button that focuses that sheet.
+- To link a persona permanently, open it in SillyTavern’s Persona Manager and add a metadata entry such as:
+
+  ```json
+  {
+    "rpg_companion_v20": {
+      "sheetId": "vtm-brujah-valeria"
+    }
+  }
+  ```
+
+  You can also use `extensions["third-party/v20-companion"].sheetId` or add a persona tag like `wod-sheet:vtm-brujah-valeria`. Metadata-driven links are read-only inside the UI so you always know when the persona manager is authoritative.
+- If no metadata is present the dropdown stays editable—select a sheet to create a global manual binding or leave it blank to rely on automatic name matching.
 
 ### Manual JSON Sync
 
 Sheets remain file-backed so you can keep authoritative copies in version control:
 
-1. Open the active character and click **Sync to File** in the toolbar.
-2. Copy the rendered JSON into `sheets/<sheet-id>.json` (or your custom file) with a text editor.
-3. Reload the extension or tap the **Reset to File** button to drop the chat override once the on-disk file matches your edits.
+1. Open the active character and click **Sync to File** to expose the raw JSON. From there you can copy it, download it, or import a JSON file to update the active sheet.
+2. Save your edits into `sheets/<sheet-id>.json` (or a new file) with your text editor of choice.
+3. Click **Reload Sheets** in the Characters tab to pull fresh copies from disk. The extension stores hashes of every bundled sheet, so the reload banner tells you exactly which files were added, updated, or removed. You can also use the **Import Sheet** button in the Characters tab to load custom JSON without editing the filesystem.
+
+Hit **Reset to File** whenever you want to drop the current chat override and revert to the on-disk copy.
 
 Any chat-specific tweaks are stored under `chat_metadata.rpg_companion_v20`, so swipes/regenerations preserve sheet state even if the source JSON changes underneath.
 

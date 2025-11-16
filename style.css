@@ -6688,11 +6688,25 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     gap: 10px;
 }
 
+.wod-persona-panel__rows--tab .wod-persona-row {
+    background: rgba(255, 255, 255, 0.02);
+    padding: 10px;
+    border-radius: 6px;
+}
+
 .wod-persona-row {
     display: flex;
     flex-direction: column;
     gap: 6px;
     margin-bottom: 8px;
+}
+
+.wod-persona-row__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--rpg-muted-text);
 }
 
 .wod-persona-row:last-child {
@@ -6720,6 +6734,43 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     color: #ffb347;
 }
 
+.wod-persona-source {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--rpg-text);
+}
+
+.wod-persona-source--metadata {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+}
+
+.wod-persona-source--manual {
+    background: rgba(52, 211, 153, 0.15);
+    color: #6ee7b7;
+}
+
+.wod-persona-source--auto {
+    background: rgba(234, 179, 8, 0.15);
+    color: #fde68a;
+}
+
+.wod-persona-source--none {
+    background: rgba(148, 163, 184, 0.15);
+    color: #e2e8f0;
+}
+
+.wod-persona-note {
+    font-size: 0.7rem;
+    color: var(--rpg-muted-text);
+}
+
 .wod-persona-row__controls {
     display: flex;
     align-items: center;
@@ -6733,6 +6784,51 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.3));
     color: var(--rpg-text);
     padding: 4px 8px;
+}
+
+.wod-characters-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.wod-characters-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.wod-reload-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.8rem;
+}
+
+.wod-reload-banner strong {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.wod-card-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 10px;
+}
+
+.wod-characters-hint {
+    font-size: 0.75rem;
+    color: var(--rpg-muted-text);
+    margin: 0;
+}
+
+.wod-mini-btn.is-busy,
+.wod-toolbar-btn.is-busy {
+    opacity: 0.6;
+    pointer-events: none;
 }
 
 .wod-dirty-pill {

@@ -1,5 +1,11 @@
 import { extensionFolderPath } from './config.js';
-import { extensionSettings, setWodSheetRegistry } from './state.js';
+import {
+    extensionSettings,
+    wodRuntimeState,
+    setWodSheetRegistry,
+    setWodSheetDigests,
+    setWodLastSheetRefreshInfo
+} from './state.js';
 
 /**
  * Normalizes the SillyTavern extension path for fetch usage.
@@ -12,6 +18,7 @@ function normalizeExtensionPath(rawPath = '') {
 }
 
 const SHEETS_BASE_PATH = `/${normalizeExtensionPath(extensionFolderPath)}/sheets`;
+const SHEET_HASH_STORAGE_KEY = 'v20-companion.sheet-hashes';
 
 async function fetchJson(url, label) {
     try {
@@ -27,25 +34,75 @@ async function fetchJson(url, label) {
     }
 }
 
+function readStoredSheetHashes() {
+    if (typeof window === 'undefined' || !window.localStorage) {
+        return {};
+    }
+    const raw = window.localStorage.getItem(SHEET_HASH_STORAGE_KEY);
+    if (!raw) {
+        return {};
+    }
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        console.warn('[RPG Companion] Failed to parse cached sheet hashes:', error);
+        return {};
+    }
+}
+
+function persistSheetHashes(payload) {
+    if (typeof window === 'undefined' || !window.localStorage) {
+        return;
+    }
+    try {
+        window.localStorage.setItem(SHEET_HASH_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+        console.warn('[RPG Companion] Failed to persist sheet hashes:', error);
+    }
+}
+
+function collectCustomDigests() {
+    const custom = {};
+    if (!wodRuntimeState.sheetDigests) {
+        return custom;
+    }
+    wodRuntimeState.sheetDigests.forEach((entry, sheetId) => {
+        if (!entry) {
+            return;
+        }
+        if (entry.source === 'custom' || entry.source === 'import') {
+            custom[sheetId] = { ...entry };
+        }
+    });
+    return custom;
+}
+
 /**
  * Loads bundled WoD sheets from the extension folder and merges them
  * into the active registry so manual JSON edits become available immediately.
+ * @param {{ source?: 'startup'|'manual' }} options
+ * @returns {{ addedSheetIds: string[], removedSheetIds: string[], changedSheetIds: string[] }}
  */
-export async function loadBundledSheets() {
+export async function loadBundledSheets(options = {}) {
+    const loadSource = options.source || 'startup';
+
     if (!SHEETS_BASE_PATH) {
         console.warn('[RPG Companion] Sheets base path missing; skipping bundled sheet load');
-        return;
+        return { addedSheetIds: [], removedSheetIds: [], changedSheetIds: [] };
     }
 
     const indexUrl = `${SHEETS_BASE_PATH}/sheet-index.json`;
     const manifest = await fetchJson(indexUrl, 'sheet index');
     if (!manifest || !Array.isArray(manifest.sheets)) {
         console.warn('[RPG Companion] No sheet-index.json found or invalid format; skipping bundled sheet load');
-        return;
+        return { addedSheetIds: [], removedSheetIds: [], changedSheetIds: [] };
     }
 
     const bundledSheets = {};
+    const bundledDigests = {};
     const manifestOrder = [];
+    const now = Date.now();
 
     for (const entry of manifest.sheets) {
         if (!entry || !entry.id || !entry.file) {
@@ -58,6 +115,12 @@ export async function loadBundledSheets() {
         }
         bundledSheets[sheet.id] = sheet;
         manifestOrder.push(sheet.id);
+        bundledDigests[sheet.id] = {
+            hash: computeSheetHash(sheet),
+            file: entry.file,
+            source: 'file',
+            lastLoaded: now
+        };
     }
 
     const existing = extensionSettings?.wod?.sheetRegistry || {};
@@ -74,4 +137,49 @@ export async function loadBundledSheets() {
     });
 
     setWodSheetRegistry(merged, { preferredOrder });
+
+    const storedHashes = readStoredSheetHashes();
+    const changedSheetIds = [];
+    const addedSheetIds = [];
+    Object.entries(bundledDigests).forEach(([sheetId, payload]) => {
+        const previous = storedHashes[sheetId];
+        if (!previous) {
+            addedSheetIds.push(sheetId);
+            changedSheetIds.push(sheetId);
+            return;
+        }
+        if (previous.hash !== payload.hash) {
+            changedSheetIds.push(sheetId);
+        }
+    });
+    const removedSheetIds = Object.keys(storedHashes).filter(sheetId => !bundledDigests[sheetId]);
+
+    const combinedDigests = {
+        ...collectCustomDigests(),
+        ...bundledDigests
+    };
+    setWodSheetDigests(combinedDigests);
+    persistSheetHashes(bundledDigests);
+    setWodLastSheetRefreshInfo({
+        timestamp: now,
+        source: loadSource,
+        changedSheetIds,
+        addedSheetIds,
+        removedSheetIds
+    });
+
+    return { addedSheetIds, removedSheetIds, changedSheetIds };
+}
+
+export function computeSheetHash(sheet) {
+    if (!sheet) {
+        return '';
+    }
+    const payload = typeof sheet === 'string' ? sheet : JSON.stringify(sheet);
+    let hash = 5381;
+    for (let i = 0; i < payload.length; i += 1) {
+        hash = ((hash << 5) + hash) ^ payload.charCodeAt(i);
+    }
+    const normalized = (hash >>> 0).toString(16);
+    return `h${payload.length}_${normalized}`;
 }

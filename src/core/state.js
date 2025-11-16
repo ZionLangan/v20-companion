@@ -158,7 +158,9 @@ export const wodRuntimeState = {
     sceneInfo: null,
     diceDefaults: { ...DEFAULT_WOD_DICE_DEFAULTS },
     chatOverrides: new Map(),
-    dirtySheets: new Set()
+    dirtySheets: new Set(),
+    sheetDigests: new Map(),
+    lastSheetRefresh: null
 };
 
 /**
@@ -403,6 +405,7 @@ export const FALLBACK_AVATAR_DATA_URI = 'data:image/svg+xml;base64,PHN2ZyB4bWxuc
  */
 export let $panelContainer = null;
 export let $userStatsContainer = null;
+export let $charactersContainer = null;
 export let $infoBoxContainer = null;
 export let $thoughtsContainer = null;
 export let $inventoryContainer = null;
@@ -457,6 +460,10 @@ export function setPanelContainer($element) {
 
 export function setUserStatsContainer($element) {
     $userStatsContainer = $element;
+}
+
+export function setCharactersContainer($element) {
+    $charactersContainer = $element;
 }
 
 export function setInfoBoxContainer($element) {
@@ -682,6 +689,53 @@ export function setWodDiceDefaults(defaults = {}) {
         ...defaults
     };
     syncWodDiceDefaultsFromSettings();
+}
+
+export function setWodSheetDigests(digests = {}) {
+    const map = new Map();
+    Object.entries(digests).forEach(([sheetId, payload]) => {
+        if (!sheetId || !payload) {
+            return;
+        }
+        map.set(sheetId, { ...payload });
+    });
+    wodRuntimeState.sheetDigests = map;
+}
+
+export function upsertWodSheetDigest(sheetId, payload) {
+    if (!sheetId) {
+        return;
+    }
+    if (!wodRuntimeState.sheetDigests) {
+        wodRuntimeState.sheetDigests = new Map();
+    }
+    if (!payload) {
+        wodRuntimeState.sheetDigests.delete(sheetId);
+        return;
+    }
+    wodRuntimeState.sheetDigests.set(sheetId, { ...payload });
+}
+
+export function getWodSheetDigest(sheetId) {
+    if (!sheetId || !wodRuntimeState.sheetDigests) {
+        return null;
+    }
+    const payload = wodRuntimeState.sheetDigests.get(sheetId);
+    return payload ? { ...payload } : null;
+}
+
+export function setWodLastSheetRefreshInfo(info = null) {
+    if (info === null) {
+        wodRuntimeState.lastSheetRefresh = null;
+        return;
+    }
+    wodRuntimeState.lastSheetRefresh = {
+        timestamp: info.timestamp || Date.now(),
+        source: info.source || 'startup',
+        changedSheetIds: Array.isArray(info.changedSheetIds) ? info.changedSheetIds : [],
+        addedSheetIds: Array.isArray(info.addedSheetIds) ? info.addedSheetIds : [],
+        removedSheetIds: Array.isArray(info.removedSheetIds) ? info.removedSheetIds : []
+    };
 }
 
 export function setWodChatOverrides(overrides = {}) {

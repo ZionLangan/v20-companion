@@ -15,6 +15,7 @@ import {
     FALLBACK_AVATAR_DATA_URI,
     $panelContainer,
     $userStatsContainer,
+    $charactersContainer,
     $infoBoxContainer,
     $thoughtsContainer,
     $inventoryContainer,
@@ -30,6 +31,7 @@ import {
     setIsPlotProgression,
     setPanelContainer,
     setUserStatsContainer,
+    setCharactersContainer,
     setInfoBoxContainer,
     setThoughtsContainer,
     setInventoryContainer,
@@ -241,6 +243,7 @@ async function initUI() {
     // Cache UI elements using state setters
     setPanelContainer($('#rpg-companion-panel'));
     setUserStatsContainer($('#rpg-user-stats'));
+    setCharactersContainer($('#rpg-characters'));
     setInfoBoxContainer($('#rpg-info-box'));
     setThoughtsContainer($('#rpg-thoughts'));
     setInventoryContainer($('#rpg-inventory'));
