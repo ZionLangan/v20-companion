@@ -339,14 +339,13 @@ export function resolveDicePool(config) {
 
 ---
 
-## 7. Next Steps (Step 5: Sheet UI & Editing Experience)
+## 7. Step 5 Deliverable – Sheet UI, Editing & Personas
 
-1. **Sidebar overhaul** - Replace the remaining User Stats/Info Box panels with WoD-focused layouts (Attributes/Abilities, Advantages, Disciplines, resource tracks) sourced from the active sheet.
-2. **Multi-character editing** - Provide a selector/tabs for switching sheets plus inline editors for dots/boxes with validation (0-5 dots, health track states, resource capacities).
-3. **Dirty tracking & persistence** - Flag edited sheets, push changes into `chat_metadata.rpg_companion_v20`, and surface a “Sync to File” action that dumps the merged JSON for manual copy/paste.
-4. **Dice log surfacing** - Display the latest dice log entries inside the sidebar with filters per character so players and the LLM can reference them outside the modal.
-
-Once these UI foundations exist we can move on to reworking prompt templates, parser logic, and SillyTavern integrations for multi-character WoD sessions.
+1. **WoD-first sidebar** – The User Stats column is now a full character sheet: Attributes/Abilities grouped by category, Advantages (Backgrounds, Virtues, Morality, Willpower), Health/Blood/resource pools, Disciplines, gear, merits/flaws, notes, and the in-panel dice log.
+2. **Interactive editing model** – Live-mode keeps resources clickable while structural traits require toggling **Edit Sheet**. Dot tracks enforce caps (0–5 dots or dynamic capacities), health boxes cascade damage states, and every field writes into chat overrides for SillyTavern persistence.
+3. **Dirty tracking & manual sync** – Any edit marks the sheet dirty, mirrors into `chat_metadata.rpg_companion_v20`, and exposes “Sync to File” / “Reset to File” actions so the canonical JSON on disk stays authoritative.
+4. **Dice log integration** – Recent rolls appear in the sidebar with filters (active character / all / per-sheet) so storytellers and the LLM can cite outcomes outside the modal roller.
+5. **Persona quickbar** – Whenever SillyTavern personas (single chats or group members) are present, the toolbar renders a dropdown per persona. Selecting a sheet links that persona globally, and the “Open” button instantly focuses its WoD sheet—multi-persona chats can flip between bound sheets without hunting through the global selector.
 
 ---
 

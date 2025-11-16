@@ -198,7 +198,8 @@ export let extensionSettings = {
         sheetOrder: [],
         activeSheetId: null,
         diceDefaults: { ...DEFAULT_WOD_DICE_DEFAULTS },
-        diceLogRetention: 50 // Number of roll entries to keep client-side
+        diceLogRetention: 50, // Number of roll entries to keep client-side
+        personaLinks: {}
     },
     /** @deprecated Legacy tracker placeholder until WoD UI replaces it */
     userStats: {
@@ -596,8 +597,50 @@ export function removeWodSheet(sheetId) {
     delete extensionSettings.wod.sheetRegistry[sheetId];
     extensionSettings.wod.sheetOrder = [...wodRuntimeState.sheetOrder];
     reapplyWodOverrides();
+    cleanupPersonaLinksForSheet(sheetId);
     if (wodRuntimeState.activeSheetId === sheetId) {
         setActiveWodSheetId(wodRuntimeState.sheetOrder[0] || null);
+    }
+}
+
+export function getPersonaLink(personaKey) {
+    if (!personaKey) return null;
+    const store = ensurePersonaLinkStore();
+    const entry = store[personaKey];
+    if (!entry) {
+        return null;
+    }
+    return {
+        personaKey,
+        sheetId: entry.sheetId,
+        updatedAt: entry.updatedAt || 0
+    };
+}
+
+export function getPersonaLinksSnapshot() {
+    const store = ensurePersonaLinkStore();
+    return { ...store };
+}
+
+export function setPersonaLink(personaKey, sheetId) {
+    if (!personaKey || !sheetId) {
+        return;
+    }
+    if (!wodRuntimeState.sheets.has(sheetId)) {
+        return;
+    }
+    const store = ensurePersonaLinkStore();
+    store[personaKey] = {
+        sheetId,
+        updatedAt: Date.now()
+    };
+}
+
+export function removePersonaLink(personaKey) {
+    if (!personaKey) return;
+    const store = ensurePersonaLinkStore();
+    if (store[personaKey]) {
+        delete store[personaKey];
     }
 }
 
@@ -732,8 +775,11 @@ function ensureWodSettings() {
             sheetOrder: [],
             activeSheetId: null,
             diceDefaults: { ...DEFAULT_WOD_DICE_DEFAULTS },
-            diceLogRetention: 50
+            diceLogRetention: 50,
+            personaLinks: {}
         };
+    } else if (!extensionSettings.wod.personaLinks) {
+        extensionSettings.wod.personaLinks = {};
     }
 }
 
@@ -744,4 +790,24 @@ function syncWodDiceDefaultsFromSettings() {
         ...DEFAULT_WOD_DICE_DEFAULTS,
         ...diceDefaults
     };
+}
+
+function ensurePersonaLinkStore() {
+    ensureWodSettings();
+    if (!extensionSettings.wod.personaLinks) {
+        extensionSettings.wod.personaLinks = {};
+    }
+    return extensionSettings.wod.personaLinks;
+}
+
+function cleanupPersonaLinksForSheet(sheetId) {
+    if (!sheetId) {
+        return;
+    }
+    const store = ensurePersonaLinkStore();
+    Object.keys(store).forEach(personaKey => {
+        if (store[personaKey]?.sheetId === sheetId) {
+            delete store[personaKey];
+        }
+    });
 }

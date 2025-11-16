@@ -7,9 +7,14 @@ import {
     setActiveWodSheetId,
     recordWodChatOverride,
     removeWodChatOverride,
-    isWodSheetDirty
+    isWodSheetDirty,
+    getPersonaLink,
+    setPersonaLink,
+    removePersonaLink
 } from '../../core/state.js';
 import { saveChatData, saveSettings } from '../../core/persistence.js';
+import { this_chid, characters } from '../../../../../../../script.js';
+import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 
 const ATTRIBUTE_MAX = 5;
 const EXTENDED_MAX = 10;
@@ -64,9 +69,11 @@ export function renderWodSheet() {
 
     const sheet = getActiveWodSheet();
     const dirty = sheet ? isWodSheetDirty(sheet.id) : false;
+    const personaQuickbar = renderPersonaQuickbar();
     const html = `
         <div class="wod-sheet-root" data-sheet-id="${sheet?.id || ''}" data-edit-mode="${uiState.editMode ? 'on' : 'off'}">
             ${renderCharacterToolbar(sheet, dirty)}
+            ${personaQuickbar}
             ${sheet ? renderSheetContent(sheet) : renderEmptyState()}
             ${renderSyncPanel(sheet)}
             ${renderDiceLogSection(sheet)}
@@ -118,6 +125,109 @@ function renderCharacterToolbar(sheet, dirty) {
             </div>
         </div>
     `;
+}
+
+function renderPersonaQuickbar() {
+    const personas = getActivePersonaEntries();
+    if (personas.length === 0) {
+        return '';
+    }
+    return `
+        <div class="wod-persona-panel">
+            <div class="wod-persona-panel__header">
+                <h5>Personas in Chat</h5>
+                <span>Link SillyTavern personas to WoD sheets for quick switching.</span>
+            </div>
+            <div class="wod-persona-panel__rows">
+                ${personas.map(renderPersonaRow).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function renderPersonaRow(persona) {
+    const selectOptions = buildPersonaSelectOptions(persona.sheetId);
+    const missingOption = persona.sheetId && !persona.sheetExists
+        ? `<option value="${escapeHtml(persona.sheetId)}" selected>[Missing] ${escapeHtml(persona.sheetId)}</option>`
+        : '';
+    const buttonDisabled = !persona.sheetId || !persona.sheetExists ? 'disabled' : '';
+    const buttonClasses = buttonDisabled ? 'wod-mini-btn wod-mini-btn--ghost' : 'wod-mini-btn';
+    const sheetBadge = persona.sheetId && persona.sheetExists
+        ? `<span class="wod-persona-sheet">${escapeHtml(persona.sheetName || persona.sheetId)}</span>`
+        : '';
+    const warning = persona.sheetId && !persona.sheetExists
+        ? `<span class="wod-persona-warning">Sheet missing</span>`
+        : '';
+    return `
+        <div class="wod-persona-row">
+            <div class="wod-persona-row__label">
+                <strong>${escapeHtml(persona.name)}</strong>
+                ${sheetBadge}
+                ${warning}
+            </div>
+            <div class="wod-persona-row__controls">
+                <select class="wod-persona-select" data-persona="${escapeHtml(persona.key)}">
+                    <option value="">No sheet linked</option>
+                    ${missingOption}
+                    ${selectOptions}
+                </select>
+                <button class="${buttonClasses}" data-action="activate-persona-sheet" data-persona="${escapeHtml(persona.key)}" ${buttonDisabled}>
+                    Open
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function buildPersonaSelectOptions(selectedId) {
+    if (!Array.isArray(wodRuntimeState.sheetOrder) || wodRuntimeState.sheetOrder.length === 0) {
+        return '';
+    }
+    return wodRuntimeState.sheetOrder.map(sheetId => {
+        const sheet = getWodSheet(sheetId);
+        const label = sheet?.meta?.name || sheet?.meta?.concept || sheetId;
+        const selected = sheetId === selectedId ? 'selected' : '';
+        return `<option value="${escapeHtml(sheetId)}" ${selected}>${escapeHtml(label)}</option>`;
+    }).join('');
+}
+
+function getActivePersonaEntries() {
+    const charactersInChat = getCharactersInCurrentChat();
+    const seen = new Map();
+    charactersInChat.forEach(character => {
+        if (!character) {
+            return;
+        }
+        const personaKey = character.avatar;
+        if (!personaKey || seen.has(personaKey)) {
+            return;
+        }
+        const link = getPersonaLink(personaKey);
+        const sheetId = link?.sheetId || null;
+        const sheet = sheetId ? getWodSheet(sheetId) : null;
+        seen.set(personaKey, {
+            key: personaKey,
+            name: character.name || 'Persona',
+            sheetId,
+            sheetName: sheet?.meta?.name || sheet?.meta?.concept || sheetId || '',
+            sheetExists: !!sheet
+        });
+    });
+    return Array.from(seen.values());
+}
+
+function getCharactersInCurrentChat() {
+    let personas = [];
+    if (selected_group) {
+        const members = getGroupMembers(selected_group) || [];
+        personas = members.filter(Boolean);
+    } else {
+        const index = Number(this_chid);
+        if (!Number.isNaN(index) && characters && characters[index]) {
+            personas = [characters[index]];
+        }
+    }
+    return personas;
 }
 
 function renderSheetContent(sheet) {
@@ -673,6 +783,8 @@ function ensureSheetEvents() {
     }
     $userStatsContainer
         .on('change', '.wod-character-select', handleCharacterSelect)
+        .on('change', '.wod-persona-select', handlePersonaSelectChange)
+        .on('click', '[data-action="activate-persona-sheet"]', handlePersonaActivate)
         .on('click', '.wod-dot-track button', handleDotTrackClick)
         .on('change', '.wod-field-input', handleFieldInputChange)
         .on('blur', '.wod-field-input', handleFieldInputChange)
@@ -697,6 +809,42 @@ function handleCharacterSelect(event) {
     setActiveWodSheetId(sheetId);
     uiState.syncPanelSheet = null;
     saveSettings();
+    renderWodSheet();
+}
+
+function handlePersonaSelectChange(event) {
+    const personaKey = event.currentTarget?.dataset?.persona;
+    if (!personaKey) {
+        return;
+    }
+    const sheetId = event.currentTarget.value;
+    if (!sheetId) {
+        removePersonaLink(personaKey);
+        saveSettings();
+        renderWodSheet();
+        return;
+    }
+    if (!wodRuntimeState.sheets.has(sheetId)) {
+        return;
+    }
+    setPersonaLink(personaKey, sheetId);
+    saveSettings();
+    setActiveWodSheetId(sheetId);
+    renderWodSheet();
+}
+
+function handlePersonaActivate(event) {
+    event.preventDefault();
+    const personaKey = $(event.currentTarget).data('persona');
+    if (!personaKey) {
+        return;
+    }
+    const link = getPersonaLink(personaKey);
+    const sheetId = link?.sheetId;
+    if (!sheetId || !wodRuntimeState.sheets.has(sheetId)) {
+        return;
+    }
+    setActiveWodSheetId(sheetId);
     renderWodSheet();
 }
 

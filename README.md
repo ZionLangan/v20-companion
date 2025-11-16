@@ -9,6 +9,7 @@ The v20 overhaul replaces the generic tracker panels with a fully structured WoD
 - Load multiple JSON sheets from `sheets/` and swap between them via the new character selector.
 - Edit Attributes, Abilities, Backgrounds, Virtues, Willpower, resource pools, health states, powers, merits/flaws, equipment, and notes directly inside the sidebar. All controls enforce WoD dot/box limits.
 - Every edit is tracked per chat via SillyTavern persistence (dirty sheets are flagged with a “Chat override” pill). Dice rolls launched from the modal automatically appear in the built-in dice log panel so both you and the LLM can reference authoritative results.
+- Link SillyTavern personas to sheets so the characters currently present in a chat surface their WoD trackers automatically.
 
 ### Editing & Resource Tracking
 
@@ -16,6 +17,12 @@ The v20 overhaul replaces the generic tracker panels with a fully structured WoD
 - Health levels now behave like the printed tracker: clicking any level cycles through Bashing -> Lethal -> Aggravated damage while automatically filling every box up to that point. Click the same level again to clear all wounds back to "ok".
 - Willpower uses the same single-track display as blood pools, so filled dots equal current points and grey dots show the permanent cap.
 - Every other resource pool renders as a single dot track: filled dots show the current amount, greyed dots show remaining capacity, and clicking a dot immediately sets the pool to that value.
+
+### Persona Linking
+
+- The **Personas in Chat** panel (beneath the character toolbar) lists every SillyTavern persona currently in the conversation—single chats show one persona, group chats show every member.  
+- Use each persona's dropdown to bind one of your WoD sheets or to unlink it. The **Open** button instantly switches the sidebar to that persona’s assigned sheet.
+- Persona bindings are tracked globally; once you link Valeria’s sheet, any chat where her SillyTavern persona appears will automatically expose that quick selector.
 
 ### Manual JSON Sync
 
