@@ -5,7 +5,6 @@
 
 import { getContext } from '../../../../../../extensions.js';
 import { this_chid, characters } from '../../../../../../../script.js';
-import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import {
     extensionSettings,
     lastGeneratedData,
@@ -16,6 +15,7 @@ import {
 } from '../../core/state.js';
 import { saveChatData } from '../../core/persistence.js';
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
+import { getCurrentGroupId, getCurrentGroupMembers } from '../../core/personas.js';
 
 /**
  * Helper to log to both console and debug logs array
@@ -305,11 +305,12 @@ export function renderThoughts() {
                 debugLog(`[RPG Thoughts] Looking up avatar for: ${char.name}`);
 
                 // For group chats, search through group members first
-                if (selected_group) {
+                const groupId = getCurrentGroupId();
+                if (groupId) {
                     debugLog('[RPG Thoughts] In group chat, checking group members...');
 
                     try {
-                        const groupMembers = getGroupMembers(selected_group);
+                        const groupMembers = getCurrentGroupMembers(groupId);
                         debugLog('[RPG Thoughts] Group members count:', groupMembers ? groupMembers.length : 0);
 
                         if (groupMembers && groupMembers.length > 0) {

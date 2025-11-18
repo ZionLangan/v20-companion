@@ -4,7 +4,6 @@
  */
 
 import { chat, characters, this_chid, generateRaw, substituteParams, eventSource, event_types } from '../../../../../../../script.js';
-import { selected_group } from '../../../../../../group-chats.js';
 import { extensionSettings, addDebugLog } from '../../core/state.js';
 import { saveSettings } from '../../core/persistence.js';
 import { checkWorldInfo, createNewWorldInfo, openWorldInfoEditor, saveWorldInfo, setWorldInfoSettings } from '../../../../../../world-info.js';

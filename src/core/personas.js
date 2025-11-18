@@ -1,5 +1,4 @@
 import { this_chid, characters } from '../../../../../../../script.js';
-import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
 import {
     wodRuntimeState,
     getPersonaLink,
@@ -65,8 +64,9 @@ export function buildPersonaSceneEntries() {
 
 function getCharactersInCurrentChat() {
     let personas = [];
-    if (selected_group) {
-        const members = getGroupMembers(selected_group) || [];
+    const groupId = getCurrentGroupId();
+    if (groupId) {
+        const members = getCurrentGroupMembers(groupId);
         personas = members.filter(Boolean);
     } else {
         const index = Number(this_chid);
@@ -200,4 +200,51 @@ function normalizeName(value) {
 
 export function normalizePersonaName(value) {
     return normalizeName(value);
+}
+
+/**
+ * Returns the currently selected group id, if any.
+ * @returns {string|null}
+ */
+export function getCurrentGroupId() {
+    if (typeof selected_group !== 'undefined' && selected_group) {
+        return selected_group;
+    }
+    if (typeof window !== 'undefined' && window.selected_group) {
+        return window.selected_group;
+    }
+    return null;
+}
+
+/**
+ * Returns the group members for the given group id.
+ * @param {string} groupId
+ * @returns {Array<any>}
+ */
+export function getCurrentGroupMembers(groupId = getCurrentGroupId()) {
+    if (!groupId) {
+        return [];
+    }
+    const globalGetter = typeof getGroupMembers === 'function'
+        ? getGroupMembers
+        : (typeof window !== 'undefined' && typeof window.getGroupMembers === 'function'
+            ? window.getGroupMembers
+            : null);
+    if (globalGetter) {
+        try {
+            const members = globalGetter(groupId);
+            if (Array.isArray(members)) {
+                return members;
+            }
+        } catch (error) {
+            console.warn('[RPG Companion] Failed to read group members', error);
+        }
+    }
+    if (typeof window !== 'undefined') {
+        const byId = window.group_members || window.groupMembers;
+        if (byId && Array.isArray(byId[groupId])) {
+            return byId[groupId];
+        }
+    }
+    return [];
 }
