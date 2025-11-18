@@ -21,6 +21,7 @@ The v20 overhaul replaces the generic tracker panels with a fully structured WoD
 ### Persona Linking & Characters Tab
 
 - The **Characters** tab now mirrors the Personas panel under the sheet toolbar, showing every SillyTavern persona that is currently in the chat (group chats show all members). Each row displays the linked sheet, the linking source (metadata/manual/auto-match), and a quick **Open** button that focuses that sheet.
+- Any persona with a linked sheet (metadata, tag, or manual binding) is automatically serialized into the `Character Sheets` tracker block, so the prompt builder always supplies real mechanical data to the LLM without waiting for manual Scene Info edits.
 - To link a persona permanently, open it in SillyTavern’s Persona Manager and add a metadata entry such as:
 
   ```json

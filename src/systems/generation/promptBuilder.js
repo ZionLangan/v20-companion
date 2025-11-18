@@ -10,6 +10,11 @@ import {
     wodRuntimeState,
     getActiveWodSheet
 } from '../../core/state.js';
+import {
+    collectPersonaBindings,
+    buildPersonaSceneEntries,
+    normalizePersonaName
+} from '../../core/personas.js';
 
 // Type imports
 /** @typedef {import('../../types/inventory.js').InventoryV2} InventoryV2 */
@@ -109,6 +114,18 @@ export function collectSheetsForPrompt(limit = MAX_PROMPT_SHEETS) {
     };
 
     pushSheet(getActiveWodSheet());
+
+    const personaEntries = collectPersonaBindings();
+    personaEntries.forEach(entry => {
+        if (selected.length >= limit) {
+            return;
+        }
+        if (entry.sheet) {
+            pushSheet(entry.sheet);
+        } else if (entry.sheetId) {
+            pushSheet(sheets.get(entry.sheetId));
+        }
+    });
 
     const order = wodRuntimeState.sheetOrder || [];
     order.some(sheetId => {
@@ -263,10 +280,8 @@ function buildSceneInfoBlock() {
     if (committed && isLikelyJsonObject(committed)) {
         return committed.trim();
     }
-    if (wodRuntimeState.sceneInfo) {
-        return stringifyForPrompt(wodRuntimeState.sceneInfo);
-    }
-    const fallback = {
+    const runtimeScene = wodRuntimeState.sceneInfo ? JSON.parse(JSON.stringify(wodRuntimeState.sceneInfo)) : null;
+    const sceneInfo = runtimeScene || {
         location: 'Unknown location',
         time: 'Unset',
         weather: null,
@@ -274,7 +289,8 @@ function buildSceneInfoBlock() {
         openThreads: [],
         presentCharacters: []
     };
-    return stringifyForPrompt(fallback);
+    injectPersonaPresence(sceneInfo);
+    return stringifyForPrompt(sceneInfo);
 }
 
 function buildDiceLogBlock() {
@@ -384,6 +400,38 @@ function buildDiceLogSummary(entries) {
         const actor = entry.sheetName || entry.sheetId || 'Unknown character';
         return `${actor} rolled ${entry.poolLabel || 'a pool'} at difficulty ${entry.difficulty}: ${entry.successes} successes (${entry.outcome}).`;
     }).join(' ');
+}
+
+function injectPersonaPresence(sceneInfo) {
+    if (!sceneInfo) {
+        return;
+    }
+    const personaEntries = buildPersonaSceneEntries();
+    if (!Array.isArray(sceneInfo.presentCharacters) || sceneInfo.presentCharacters.length === 0) {
+        if (personaEntries.length > 0) {
+            sceneInfo.presentCharacters = personaEntries;
+        }
+        return;
+    }
+    if (personaEntries.length === 0) {
+        return;
+    }
+    const personaMap = new Map();
+    personaEntries.forEach(entry => {
+        if (entry.name) {
+            personaMap.set(normalizePersonaName(entry.name), entry);
+        }
+    });
+    sceneInfo.presentCharacters = sceneInfo.presentCharacters.map(entry => {
+        if (!entry || entry.sheetId || !entry.name) {
+            return entry;
+        }
+        const match = personaMap.get(normalizePersonaName(entry.name));
+        if (match && match.sheetId) {
+            return { ...entry, sheetId: match.sheetId };
+        }
+        return entry;
+    });
 }
 
 /**

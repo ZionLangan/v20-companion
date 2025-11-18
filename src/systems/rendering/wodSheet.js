@@ -9,7 +9,6 @@ import {
     recordWodChatOverride,
     removeWodChatOverride,
     isWodSheetDirty,
-    getPersonaLink,
     setPersonaLink,
     removePersonaLink,
     upsertWodSheet,
@@ -17,9 +16,7 @@ import {
 } from '../../core/state.js';
 import { saveChatData, saveSettings } from '../../core/persistence.js';
 import { loadBundledSheets, computeSheetHash } from '../../core/sheets.js';
-import { extensionName } from '../../core/config.js';
-import { this_chid, characters } from '../../../../../../../script.js';
-import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
+import { collectPersonaBindings } from '../../core/personas.js';
 
 const ATTRIBUTE_MAX = 5;
 const EXTENDED_MAX = 10;
@@ -75,7 +72,7 @@ export function renderWodSheet() {
 
     const sheet = getActiveWodSheet();
     const dirty = sheet ? isWodSheetDirty(sheet.id) : false;
-    const personas = getActivePersonaEntries();
+    const personas = collectPersonaBindings();
     const personaQuickbar = renderPersonaQuickbar(personas);
     const html = `
         <div class="wod-sheet-root" data-sheet-id="${sheet?.id || ''}" data-edit-mode="${uiState.editMode ? 'on' : 'off'}">
@@ -136,7 +133,7 @@ function renderCharacterToolbar(sheet, dirty) {
 }
 
 function renderPersonaQuickbar(personaList = null) {
-    const personas = Array.isArray(personaList) ? personaList : getActivePersonaEntries();
+    const personas = Array.isArray(personaList) ? personaList : collectPersonaBindings();
     if (personas.length === 0) {
         return '';
     }
@@ -305,171 +302,6 @@ function buildPersonaSelectOptions(selectedId) {
         const selected = sheetId === selectedId ? 'selected' : '';
         return `<option value="${escapeHtml(sheetId)}" ${selected}>${escapeHtml(label)}</option>`;
     }).join('');
-}
-
-function getActivePersonaEntries() {
-    const charactersInChat = getCharactersInCurrentChat();
-    const seen = new Map();
-    charactersInChat.forEach(character => {
-        if (!character) {
-            return;
-        }
-        const personaKey = resolvePersonaKey(character);
-        if (!personaKey || seen.has(personaKey)) {
-            return;
-        }
-        const metadataLink = extractSheetFromMetadata(character);
-        const manualLink = personaKey ? getPersonaLink(personaKey) : null;
-        const autoLink = (!metadataLink && !manualLink) ? autoMatchSheet(character) : null;
-        const sheetId = metadataLink?.sheetId || manualLink?.sheetId || autoLink?.sheetId || null;
-        const sheet = sheetId ? getWodSheet(sheetId) : null;
-        seen.set(personaKey, {
-            key: personaKey,
-            name: character.name || 'Persona',
-            sheetId,
-            sheetName: sheet?.meta?.name || sheet?.meta?.concept || sheetId || '',
-            sheetExists: !!sheet,
-            linkSource: metadataLink ? 'metadata' : manualLink ? 'manual' : autoLink ? 'auto' : 'none',
-            metadataPath: metadataLink?.path || null,
-            autoReason: autoLink?.reason || null
-        });
-    });
-    return Array.from(seen.values());
-}
-
-function getCharactersInCurrentChat() {
-    let personas = [];
-    if (selected_group) {
-        const members = getGroupMembers(selected_group) || [];
-        personas = members.filter(Boolean);
-    } else {
-        const index = Number(this_chid);
-        if (!Number.isNaN(index) && characters && characters[index]) {
-            personas = [characters[index]];
-        }
-    }
-    return personas;
-}
-
-function resolvePersonaKey(character) {
-    if (!character) {
-        return null;
-    }
-    return character.avatar || character.characterId || character.id || character.name || null;
-}
-
-function extractSheetFromMetadata(character) {
-    const metadata = parsePersonaMetadata(character?.metadata);
-    const candidates = [];
-    if (metadata) {
-        candidates.push({
-            path: 'metadata.rpg_companion_v20.sheetId',
-            value: metadata?.rpg_companion_v20?.sheetId
-        });
-        candidates.push({
-            path: 'metadata.rpgCompanion.sheetId',
-            value: metadata?.rpgCompanion?.sheetId
-        });
-        candidates.push({
-            path: 'metadata.rpgCompanionSheet',
-            value: metadata?.rpgCompanionSheet
-        });
-        candidates.push({
-            path: `metadata.extensions["${extensionName}"].sheetId`,
-            value: metadata?.extensions?.[extensionName]?.sheetId
-        });
-        candidates.push({
-            path: 'metadata.extensions.v20.sheetId',
-            value: metadata?.extensions?.v20?.sheetId
-        });
-        candidates.push({
-            path: 'metadata.sheetId',
-            value: metadata?.sheetId
-        });
-        candidates.push({
-            path: 'metadata.wodSheetId',
-            value: metadata?.wodSheetId
-        });
-        for (const candidate of candidates) {
-            if (typeof candidate.value === 'string' && candidate.value.trim().length > 0) {
-                return {
-                    sheetId: candidate.value.trim(),
-                    path: candidate.path
-                };
-            }
-        }
-    }
-    const tagSheet = extractSheetFromTags(character?.tags);
-    if (tagSheet) {
-        return {
-            sheetId: tagSheet,
-            path: 'tags[wod-sheet]'
-        };
-    }
-    return null;
-}
-
-function parsePersonaMetadata(raw) {
-    if (!raw) {
-        return null;
-    }
-    if (typeof raw === 'object') {
-        return raw;
-    }
-    if (typeof raw === 'string') {
-        try {
-            return JSON.parse(raw);
-        } catch (error) {
-            console.warn('[RPG Companion] Failed to parse persona metadata JSON:', error);
-            return null;
-        }
-    }
-    return null;
-}
-
-function extractSheetFromTags(tags) {
-    if (!Array.isArray(tags)) {
-        return null;
-    }
-    for (const rawTag of tags) {
-        if (typeof rawTag !== 'string') {
-            continue;
-        }
-        const normalized = rawTag.trim();
-        const match = normalized.match(/^(?:wod[-_]?sheet|sheet)\s*[:=]\s*(.+)$/i);
-        if (match && match[1]) {
-            return match[1].trim();
-        }
-    }
-    return null;
-}
-
-function autoMatchSheet(character) {
-    const normalizedName = normalizeName(character?.name);
-    if (!normalizedName) {
-        return null;
-    }
-    const matches = [];
-    wodRuntimeState.sheets.forEach((sheet, sheetId) => {
-        const sheetName = normalizeName(sheet?.meta?.name);
-        if (sheetName && sheetName === normalizedName) {
-            matches.push({ sheetId, label: sheet?.meta?.name || sheetId });
-        }
-    });
-    if (matches.length === 1) {
-        return {
-            sheetId: matches[0].sheetId,
-            reason: `Matches ${matches[0].label}`
-        };
-    }
-    return null;
-}
-
-function normalizeName(value) {
-    if (!value) {
-        return '';
-    }
-    return String(value).trim().toLowerCase();
 }
 
 function renderSheetContent(sheet) {
@@ -1102,7 +934,7 @@ function handlePersonaActivate(event) {
     }
     let sheetId = $(event.currentTarget).data('sheet');
     if (!sheetId) {
-        const persona = getActivePersonaEntries().find(entry => entry.key === personaKey);
+        const persona = collectPersonaBindings().find(entry => entry.key === personaKey);
         sheetId = persona?.sheetId;
     }
     if (!sheetId || !wodRuntimeState.sheets.has(sheetId)) {
