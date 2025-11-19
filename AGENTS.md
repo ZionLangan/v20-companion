@@ -12,7 +12,7 @@ All work happens inside this repo’s ES-module front-end codebase (no build ste
 ## Ground Rules
 1. **Respect existing architecture** – continue to centralize state in `src/core/state.js`, load/save via `src/core/persistence.js`, and surface UI in `template.html` + `src/systems/**` modules.
 2. **WoD-first schema** – percentages and placeholder fields must be phased out in favor of explicit dot/box tracks that mirror v20. Use integers (0–5 dots, etc.) and structured arrays/objects; do not store WoD data as markdown blobs.
-3. **LLM synchronization** – anything rendered in the sidebar must also be emitted through the prompt builder and parsed back verbatim. Update `generateTrackerInstructions`, `generateContextualSummary`, parser, and SillyTavern injection hooks in tandem.
+3. **LLM synchronization** – the extension injects the authoritative `Character Sheets` / `Scene Info` / `Dice Log` blocks ahead of every generation. Together mode replies must reference that context without re-emitting the trackers, while Separate mode prompts request JSON edits to the same canonical payload. Keep `generateTrackerInstructions`, `generateContextualSummary`, parser, and injection hooks aligned with this extension-managed flow.
 4. **File-based sheets** – keep canonical character sheets as JSON under a new `sheets/` directory. Provide loader/saver utilities that (a) fetch files for default seeds and (b) optionally serialize edits back through SillyTavern’s `saveSettings`/chat metadata so per-chat tweaks persist even if the underlying JSON is edited manually.
 5. **Dice transparency** – log each WoD dice pool calculation (pool size, difficulty, 10-again rules, botches, willpower expenditures, rerolls) so both the UI and the LLM can reference authoritative roll outcomes.
 6. **Incremental delivery** – complete the numbered steps below one at a time. Each step should be reviewable/mergeable on its own.
@@ -59,6 +59,7 @@ Each step should result in compiling code, updated docs, and (when applicable) t
    - Rewrite `generateTrackerInstructions`, `generateTrackerExample`, `generateContextualSummary`, and `generateSeparateUpdatePrompt` to describe the WoD sheet format (probably multiple fenced blocks: `Character Sheet`, `Scene Info`, `Dice Log`).
    - Include explicit instructions for how the LLM should update multiple characters (e.g., list each present character with their traits and statuses) and how dice results should be referenced.
    - Ensure Together and Separate modes both send identical schemas and remain configurable via the extension’s enable flags.
+   - Together mode must inject the canonical tracker blocks directly so the assistant never reprints them, while Separate mode prompts request targeted JSON edits to those same blocks.
 
 7. **Parser & SillyTavern Integration**
    - Update `parseResponse` to read the new code fences, validate values (dots stay 0–5, health levels align with Bruised–Incapacitated, etc.), and map them into the sheet state.

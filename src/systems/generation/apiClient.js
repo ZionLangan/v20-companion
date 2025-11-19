@@ -13,16 +13,11 @@ import {
     lastActionWasSwipe,
     setIsGenerating,
     setLastActionWasSwipe,
-    wodRuntimeState,
     setWodSceneInfo
 } from '../../core/state.js';
 import { saveChatData } from '../../core/persistence.js';
-import {
-    generateSeparateUpdatePrompt,
-    collectSheetsForPrompt,
-    serializeSheetForPrompt,
-    formatDiceLogEntries
-} from './promptBuilder.js';
+import { generateSeparateUpdatePrompt } from './promptBuilder.js';
+import { recomputeWodContextSnapshot } from '../../core/context.js';
 import { parseResponse, parseUserStats } from './parser.js';
 import { sanitizeSheetsFromPrompt, applySheetsFromPrompt, sanitizeSceneInfo } from './wodSync.js';
 import { renderUserStats } from '../rendering/userStats.js';
@@ -265,24 +260,16 @@ export async function updateRPGData(renderUserStats, renderInfoBox, renderThough
 }
 
 function buildCharacterSheetSnapshot() {
-    const sheets = collectSheetsForPrompt();
-    const payload = sheets
-        .map(serializeSheetForPrompt)
-        .filter(Boolean);
-    if (payload.length === 0) {
-        return JSON.stringify([], null, 2);
-    }
-    return JSON.stringify(payload, null, 2);
+    const snapshot = recomputeWodContextSnapshot();
+    return snapshot.characterSheets;
 }
 
 function buildSceneInfoSnapshot() {
-    if (!wodRuntimeState.sceneInfo) {
-        return null;
-    }
-    return JSON.stringify(wodRuntimeState.sceneInfo, null, 2);
+    const snapshot = recomputeWodContextSnapshot();
+    return snapshot.sceneInfo;
 }
 
 function buildDiceLogSnapshot() {
-    const payload = formatDiceLogEntries(wodRuntimeState.diceLog || []);
-    return JSON.stringify(payload, null, 2);
+    const snapshot = recomputeWodContextSnapshot();
+    return snapshot.diceLog;
 }

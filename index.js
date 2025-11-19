@@ -43,7 +43,6 @@ import { registerAllEvents } from './src/core/events.js';
 // Generation & Parsing modules
 import {
     generateTrackerExample,
-    generateTrackerInstructions,
     generateContextualSummary,
     generateSeparateUpdatePrompt
 } from './src/systems/generation/promptBuilder.js';

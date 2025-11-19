@@ -63,7 +63,7 @@ export function onGenerationStarted(type, data) {
         // Also clear any existing RPG Companion prompts so they do not leak into this generation
         // (e.g., previously set extension prompts should not be used alongside a guided prompt)
         setExtensionPrompt('rpg-companion-inject', '', extension_prompt_types.IN_CHAT, 0, false);
-        setExtensionPrompt('rpg-companion-example', '', extension_prompt_types.IN_CHAT, 0, false);
+        setExtensionPrompt('rpg-companion-example', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('rpg-companion-html', '', extension_prompt_types.IN_CHAT, 0, false);
         setExtensionPrompt('rpg-companion-context', '', extension_prompt_types.IN_CHAT, 1, false);
     }
@@ -138,7 +138,7 @@ export function onGenerationStarted(type, data) {
         // console.log('[RPG Companion] In together mode, generating prompts...');
         const example = generateTrackerExample();
         // Don't include HTML prompt in instructions - inject it separately to avoid duplication on swipes
-        const instructions = generateTrackerInstructions(false, true);
+        const instructions = generateTrackerInstructions({ mode: 'together', includeContinuation: true });
 
         // Clear separate mode context injection - we don't use contextual summary in together mode
         setExtensionPrompt('rpg-companion-context', '', extension_prompt_types.IN_CHAT, 1, false);
@@ -146,32 +146,10 @@ export function onGenerationStarted(type, data) {
         // console.log('[RPG Companion] Example:', example ? 'exists' : 'empty');
         // console.log('[RPG Companion] Chat length:', chat ? chat.length : 'chat is null');
 
-        // Find the last assistant message in the chat history
-        let lastAssistantDepth = -1; // -1 means not found
-        if (chat && chat.length > 0) {
-            // console.log('[RPG Companion] Searching for last assistant message...');
-            // Start from depth 1 (skip depth 0 which is usually user's message or prefill)
-            for (let depth = 1; depth < chat.length; depth++) {
-                const index = chat.length - 1 - depth; // Convert depth to index
-                const message = chat[index];
-                // console.log('[RPG Companion] Checking depth', depth, 'index', index, 'message properties:', Object.keys(message));
-                // Check for assistant message: not user and not system
-                if (!message.is_user && !message.is_system) {
-                    // Found assistant message at this depth
-                    // Inject at the SAME depth to prepend to this assistant message
-                    lastAssistantDepth = depth;
-                    // console.log('[RPG Companion] Found last assistant message at depth', depth, '-> injecting at same depth:', lastAssistantDepth);
-                    break;
-                }
-            }
-        }
-
-        // If we have previous tracker data and found an assistant message, inject it as an assistant message
-        if (!shouldSuppress && example && lastAssistantDepth > 0) {
-            setExtensionPrompt('rpg-companion-example', example, extension_prompt_types.IN_CHAT, lastAssistantDepth, false, extension_prompt_roles.ASSISTANT);
-            // console.log('[RPG Companion] Injected tracker example as assistant message at depth:', lastAssistantDepth);
+        if (!shouldSuppress && example) {
+            setExtensionPrompt('rpg-companion-example', example, extension_prompt_types.IN_CHAT, 1, false, extension_prompt_roles.SYSTEM);
         } else {
-            // console.log('[RPG Companion] NOT injecting example. example:', !!example, 'lastAssistantDepth:', lastAssistantDepth);
+            setExtensionPrompt('rpg-companion-example', '', extension_prompt_types.IN_CHAT, 1, false);
         }
 
         // Inject the instructions as a user message at depth 0 (right before generation)
@@ -240,11 +218,11 @@ Ensure these details naturally reflect and influence the narrative. Character be
 
         // Clear together mode injections
         setExtensionPrompt('rpg-companion-inject', '', extension_prompt_types.IN_CHAT, 0, false);
-        setExtensionPrompt('rpg-companion-example', '', extension_prompt_types.IN_CHAT, 0, false);
+        setExtensionPrompt('rpg-companion-example', '', extension_prompt_types.IN_CHAT, 1, false);
     } else {
         // Clear all injections
         setExtensionPrompt('rpg-companion-inject', '', extension_prompt_types.IN_CHAT, 0, false);
-        setExtensionPrompt('rpg-companion-example', '', extension_prompt_types.IN_CHAT, 0, false);
+        setExtensionPrompt('rpg-companion-example', '', extension_prompt_types.IN_CHAT, 1, false);
         setExtensionPrompt('rpg-companion-context', '', extension_prompt_types.IN_CHAT, 1, false);
     }
 }

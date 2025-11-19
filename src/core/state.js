@@ -160,7 +160,12 @@ export const wodRuntimeState = {
     chatOverrides: new Map(),
     dirtySheets: new Set(),
     sheetDigests: new Map(),
-    lastSheetRefresh: null
+    lastSheetRefresh: null,
+    contextSnapshot: {
+        characterSheets: '[]',
+        sceneInfo: '{}',
+        diceLog: '[]'
+    }
 };
 
 /**
@@ -689,6 +694,22 @@ export function setWodDiceDefaults(defaults = {}) {
         ...defaults
     };
     syncWodDiceDefaultsFromSettings();
+}
+
+export function getWodContextSnapshot() {
+    return {
+        characterSheets: wodRuntimeState.contextSnapshot.characterSheets,
+        sceneInfo: wodRuntimeState.contextSnapshot.sceneInfo,
+        diceLog: wodRuntimeState.contextSnapshot.diceLog
+    };
+}
+
+export function setWodContextSnapshot(snapshot = {}) {
+    wodRuntimeState.contextSnapshot = {
+        characterSheets: snapshot.characterSheets || '[]',
+        sceneInfo: snapshot.sceneInfo || '{}',
+        diceLog: snapshot.diceLog || '[]'
+    };
 }
 
 export function setWodSheetDigests(digests = {}) {

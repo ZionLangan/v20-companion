@@ -4,17 +4,8 @@
  */
 
 import { chat } from '../../../../../../../script.js';
-import {
-    extensionSettings,
-    committedTrackerData,
-    wodRuntimeState,
-    getActiveWodSheet
-} from '../../core/state.js';
-import {
-    collectPersonaBindings,
-    buildPersonaSceneEntries,
-    normalizePersonaName
-} from '../../core/personas.js';
+import { extensionSettings } from '../../core/state.js';
+import { recomputeWodContextSnapshot } from '../../core/context.js';
 
 // Type imports
 /** @typedef {import('../../types/inventory.js').InventoryV2} InventoryV2 */
@@ -65,270 +56,53 @@ export function buildInventorySummary(inventory) {
     return 'None';
 }
 
-export const MAX_PROMPT_SHEETS = 3;
-export const MAX_PROMPT_DICE_LOG = 5;
-const MAX_NOTES_PER_SHEET = 4;
-const MAX_EQUIPMENT_ITEMS = 6;
+let cachedSnapshot = null;
 
-function stringifyForPrompt(value) {
+function ensureContextSnapshot() {
+    if (!cachedSnapshot) {
+        cachedSnapshot = recomputeWodContextSnapshot();
+    }
+    return cachedSnapshot;
+}
+
+function resetContextSnapshot() {
+    cachedSnapshot = null;
+}
+
+function parseJsonArray(text, fallback = []) {
+    if (!text) {
+        return fallback;
+    }
     try {
-        return JSON.stringify(value, null, 2);
+        const parsed = JSON.parse(text);
+        return Array.isArray(parsed) ? parsed : fallback;
     } catch (error) {
-        console.warn('[RPG Companion] Failed to stringify prompt payload', error);
-        return '[]';
+        return fallback;
     }
 }
 
-function clipArray(values, limit) {
-    if (!Array.isArray(values)) {
-        return [];
+function parseJsonObject(text, fallback = null) {
+    if (!text) {
+        return fallback;
     }
-    if (!limit || values.length <= limit) {
-        return values.slice();
+    try {
+        const parsed = JSON.parse(text);
+        return parsed && typeof parsed === 'object' ? parsed : fallback;
+    } catch (error) {
+        return fallback;
     }
-    return values.slice(0, limit);
-}
-
-function isLikelyJsonArray(text) {
-    if (typeof text !== 'string') return false;
-    const trimmed = text.trim();
-    return trimmed.startsWith('[') && trimmed.endsWith(']');
-}
-
-function isLikelyJsonObject(text) {
-    if (typeof text !== 'string') return false;
-    const trimmed = text.trim();
-    return trimmed.startsWith('{') && trimmed.endsWith('}');
-}
-
-export function collectSheetsForPrompt(limit = MAX_PROMPT_SHEETS) {
-    const selected = [];
-    const seen = new Set();
-    const sheets = wodRuntimeState.sheets instanceof Map ? wodRuntimeState.sheets : new Map();
-
-    const pushSheet = (sheet) => {
-        if (sheet && sheet.id && !seen.has(sheet.id)) {
-            selected.push(sheet);
-            seen.add(sheet.id);
-        }
-    };
-
-    pushSheet(getActiveWodSheet());
-
-    const personaEntries = collectPersonaBindings();
-    personaEntries.forEach(entry => {
-        if (selected.length >= limit) {
-            return;
-        }
-        if (entry.sheet) {
-            pushSheet(entry.sheet);
-        } else if (entry.sheetId) {
-            pushSheet(sheets.get(entry.sheetId));
-        }
-    });
-
-    const order = wodRuntimeState.sheetOrder || [];
-    order.some(sheetId => {
-        if (selected.length >= limit) {
-            return true;
-        }
-        const sheet = sheets.get(sheetId);
-        pushSheet(sheet);
-        return false;
-    });
-
-    return selected.slice(0, limit);
-}
-
-function pruneEmpty(value) {
-    if (Array.isArray(value)) {
-        const prunedArray = value
-            .map(item => pruneEmpty(item))
-            .filter(item => {
-                if (item === undefined || item === null) return false;
-                if (Array.isArray(item)) return item.length > 0;
-                if (typeof item === 'object') return Object.keys(item).length > 0;
-                return true;
-            });
-        return prunedArray;
-    }
-
-    if (value && typeof value === 'object') {
-        const prunedObject = {};
-        Object.entries(value).forEach(([key, entry]) => {
-            const pruned = pruneEmpty(entry);
-            if (pruned === undefined || pruned === null) {
-                return;
-            }
-            if (Array.isArray(pruned) && pruned.length === 0) {
-                return;
-            }
-            if (typeof pruned === 'object' && !Array.isArray(pruned) && Object.keys(pruned).length === 0) {
-                return;
-            }
-            prunedObject[key] = pruned;
-        });
-        return prunedObject;
-    }
-
-    return value;
-}
-
-function filterAbilityValues(record = {}) {
-    const filtered = {};
-    Object.entries(record).forEach(([key, value]) => {
-        const numeric = Number(value) || 0;
-        if (numeric > 0) {
-            filtered[key] = numeric;
-        }
-    });
-    return filtered;
-}
-
-export function serializeSheetForPrompt(sheet) {
-    if (!sheet) {
-        return null;
-    }
-    const meta = sheet.meta || {};
-    const traits = sheet.traits || {};
-    const abilities = traits.abilities || {};
-    const attributes = traits.attributes || {};
-    const advantages = sheet.advantages || {};
-    const equipment = sheet.equipment || {};
-
-    return pruneEmpty({
-        sheetId: sheet.id,
-        name: meta.name || sheet.id,
-        concept: meta.concept || null,
-        chronicle: meta.chronicle || null,
-        faction: meta.faction?.value || meta.faction?.type || null,
-        supernaturalType: meta.supernaturalType || meta.supernaturalSubtype || null,
-        nature: meta.nature || null,
-        demeanor: meta.demeanor || null,
-        notes: clipArray(Array.isArray(sheet.notes) ? sheet.notes : meta.notes || [], MAX_NOTES_PER_SHEET),
-        traits: {
-            attributes: {
-                physical: attributes.physical || {},
-                social: attributes.social || {},
-                mental: attributes.mental || {}
-            },
-            abilities: {
-                talents: filterAbilityValues(abilities.talents || {}),
-                skills: filterAbilityValues(abilities.skills || {}),
-                knowledges: filterAbilityValues(abilities.knowledges || {})
-            }
-        },
-        advantages: {
-            backgrounds: clipArray(advantages.backgrounds || [], MAX_EQUIPMENT_ITEMS).map(entry => ({
-                name: entry.name,
-                rating: Number(entry.rating) || 0,
-                description: entry.description || undefined
-            })),
-            virtues: advantages.virtues || undefined,
-            morality: advantages.morality || undefined,
-            willpower: advantages.willpower || undefined,
-            health: advantages.health || undefined,
-            resourcePools: clipArray(advantages.resourcePools || [], MAX_EQUIPMENT_ITEMS).map(pool => ({
-                name: pool.name,
-                type: pool.type,
-                capacity: pool.capacity,
-                current: pool.current,
-                notes: pool.notes || undefined
-            }))
-        },
-        powerSets: clipArray(sheet.powerSets || [], MAX_EQUIPMENT_ITEMS).map(set => pruneEmpty({
-            name: set.name,
-            category: set.category,
-            rating: set.rating,
-            tags: set.tags,
-            notes: set.notes,
-            powers: clipArray(set.powers || [], MAX_EQUIPMENT_ITEMS).map(power => pruneEmpty({
-                name: power.name,
-                rating: power.rating,
-                description: power.description,
-                tags: power.tags,
-                cost: power.cost
-            }))
-        })),
-        merits: clipArray(sheet.merits || [], MAX_EQUIPMENT_ITEMS),
-        flaws: clipArray(sheet.flaws || [], MAX_EQUIPMENT_ITEMS),
-        equipment: pruneEmpty({
-            inventory: clipArray(equipment.inventory || [], MAX_EQUIPMENT_ITEMS),
-            stored: clipArray(equipment.stored || [], MAX_EQUIPMENT_ITEMS),
-            assets: clipArray(equipment.assets || [], MAX_EQUIPMENT_ITEMS)
-        })
-    });
 }
 
 function buildCharacterSheetsBlock() {
-    const committed = committedTrackerData.userStats;
-    if (committed && isLikelyJsonArray(committed)) {
-        return committed.trim();
-    }
-    const sheets = collectSheetsForPrompt();
-    if (sheets.length === 0) {
-        return stringifyForPrompt([]);
-    }
-    const payload = sheets
-        .map(serializeSheetForPrompt)
-        .filter(Boolean);
-    return stringifyForPrompt(payload);
+    return ensureContextSnapshot().characterSheets;
 }
 
 function buildSceneInfoBlock() {
-    const committed = committedTrackerData.infoBox;
-    if (committed && isLikelyJsonObject(committed)) {
-        return committed.trim();
-    }
-    const runtimeScene = wodRuntimeState.sceneInfo ? JSON.parse(JSON.stringify(wodRuntimeState.sceneInfo)) : null;
-    const sceneInfo = runtimeScene || {
-        location: 'Unknown location',
-        time: 'Unset',
-        weather: null,
-        sceneAspects: [],
-        openThreads: [],
-        presentCharacters: []
-    };
-    injectPersonaPresence(sceneInfo);
-    return stringifyForPrompt(sceneInfo);
+    return ensureContextSnapshot().sceneInfo;
 }
 
 function buildDiceLogBlock() {
-    const committed = committedTrackerData.characterThoughts;
-    if (committed && isLikelyJsonArray(committed)) {
-        return committed.trim();
-    }
-    const diceEntries = formatDiceLogEntries(wodRuntimeState.diceLog || []);
-    return stringifyForPrompt(diceEntries);
-}
-
-export function formatDiceLogEntries(entries, limit = MAX_PROMPT_DICE_LOG) {
-    return clipArray(entries || [], limit).map(entry => pruneEmpty({
-        id: entry.id,
-        sheetId: entry.sheetId || undefined,
-        sheetName: entry.sheetName || undefined,
-        pool: entry.poolLabel,
-        difficulty: entry.difficulty,
-        explode: entry.explode,
-        specialty: entry.specialtyApplies ? true : undefined,
-        willpower: entry.spendWillpower ? true : undefined,
-        successes: entry.successes,
-        outcome: entry.outcome,
-        rolls: entry.rolls,
-        timestamp: entry.timestamp,
-        notes: entry.notes || undefined
-    }));
-}
-
-function parseSceneInfoBlock(blockText) {
-    if (!blockText) {
-        return null;
-    }
-    try {
-        return JSON.parse(blockText);
-    } catch (error) {
-        return null;
-    }
+    return ensureContextSnapshot().diceLog;
 }
 
 function buildSheetSummary(sheetObject) {
@@ -402,38 +176,6 @@ function buildDiceLogSummary(entries) {
     }).join(' ');
 }
 
-function injectPersonaPresence(sceneInfo) {
-    if (!sceneInfo) {
-        return;
-    }
-    const personaEntries = buildPersonaSceneEntries();
-    if (!Array.isArray(sceneInfo.presentCharacters) || sceneInfo.presentCharacters.length === 0) {
-        if (personaEntries.length > 0) {
-            sceneInfo.presentCharacters = personaEntries;
-        }
-        return;
-    }
-    if (personaEntries.length === 0) {
-        return;
-    }
-    const personaMap = new Map();
-    personaEntries.forEach(entry => {
-        if (entry.name) {
-            personaMap.set(normalizePersonaName(entry.name), entry);
-        }
-    });
-    sceneInfo.presentCharacters = sceneInfo.presentCharacters.map(entry => {
-        if (!entry || entry.sheetId || !entry.name) {
-            return entry;
-        }
-        const match = personaMap.get(normalizePersonaName(entry.name));
-        if (match && match.sheetId) {
-            return { ...entry, sheetId: match.sheetId };
-        }
-        return entry;
-    });
-}
-
 /**
  * Builds a dynamic attributes string based on configured RPG attributes.
  * Uses custom attribute names and values from classicStats.
@@ -474,7 +216,9 @@ export function generateTrackerExample() {
         ].join('\n'));
     }
 
-    return blocks.join('\n\n').trim();
+    const result = blocks.join('\n\n').trim();
+    resetContextSnapshot();
+    return result;
 }
 
 /**
@@ -484,61 +228,42 @@ export function generateTrackerExample() {
  * @param {boolean} includeContinuation - Whether to include "After updating the trackers, continue..." instruction
  * @returns {string} Formatted instruction text for the AI
  */
-export function generateTrackerInstructions(includeHtmlPrompt = true, includeContinuation = true) {
-    const hasSheets = !!extensionSettings.showUserStats;
-    const hasScene = !!extensionSettings.showInfoBox;
-    const hasDice = !!extensionSettings.showCharacterThoughts;
-    const hasAnyTrackers = hasSheets || hasScene || hasDice;
-    let instructions = '';
+export function generateTrackerInstructions(options = {}) {
+    const {
+        mode = 'together',
+        includeContinuation = true
+    } = options;
 
-    if (hasAnyTrackers) {
-        instructions += `\nAt the start of every reply, output the enabled World of Darkness trackers exactly once before any narration. Each tracker must be a JSON code fence labeled with the section name (for example, \`\`\`Character Sheets ...\`\`\`). Copy the previous JSON when nothing changes so the extension stays authoritative, and only adjust the fields that the fiction actually moved.\n\n`;
-
-        if (hasSheets) {
-            instructions += `- **Character Sheets (\`\`\`Character Sheets ...\`\`\`)** - Body is an array of sheet objects covering the active characters. Keep the canonical keys: \`sheetId\`, \`name\`, \`concept\`, \`chronicle\`, \`faction\`, \`traits.attributes\`, \`traits.abilities\`, \`advantages\` (backgrounds, virtues, morality, willpower, health track, and resourcePools), \`powerSets\`, \`merits\`, \`flaws\`, \`equipment\`, and \`notes\`. Dots are integers (0-5 unless the fiction justifies elder ratings), resource pools never drop below 0 or exceed capacity, and health states are limited to \`"ok"\`, \`"bashing"\`, \`"lethal"\`, or \`"aggravated"\`. Include only the characters who are present or mechanically relevant to the current beat so the block stays concise.\n\n`;
-        }
-
-        if (hasScene) {
-            instructions += `- **Scene Info (\`\`\`Scene Info ...\`\`\`)** - Body is a single JSON object describing the environment and movers. Include keys such as \`location\`, \`time\`, \`weather\`, \`sceneAspects\` (array of short descriptors), \`openThreads\`, and \`presentCharacters\`. Each entry in \`presentCharacters\` should list \`name\`, \`sheetId\` when tracked, plus \`role\`, \`status\`, \`intent\`, and \`thoughts\` so the Storyteller understands goals and complications. Keep descriptions short, factual, and updated with every turn.\n\n`;
-        }
-
-        if (hasDice) {
-            instructions += `- **Dice Log (\`\`\`Dice Log ...\`\`\`)** - Body is an array of recent roll summaries with \`id\`, \`sheetId\`, \`pool\`, \`difficulty\`, \`explode\`, \`willpower\`, \`successes\`, \`outcome\`, \`rolls\`, and any \`notes\`. Do **not** invent die results. When you need a fresh roll, emit a command like [[WOD-ROLL {"sheetId":"vtm-brujah-valeria","pool":"Dexterity + Drive","difficulty":7,"modifier":1,"willpower":false}]] and keep narrating. The extension replaces the tag with the authoritative outcome and appends it to the log, so copy the updated log back unchanged unless a new official roll just occurred.\n\n`;
-        }
-
+    if (mode === 'separate') {
+        let msg = `Update the World of Darkness tracker blocks below. Modify only the fields that changed and return the updated JSON code fences exactly as formatted. Keep values within canonical ranges (dots 0-5 unless otherwise noted, resource pools between 0 and capacity, health states limited to "ok", "bashing", "lethal", or "aggravated"). When a roll is required, request it with [[WOD-ROLL {...}]] instead of inventing results.`;
         if (includeContinuation) {
-            instructions += `After the tracker fences, immediately continue the story, letting the updated dots, resources, and scene notes drive character behavior. Injuries, frenzies, empty Willpower, or tense relationships should all influence how you portray the cast.\n\n`;
+            msg += ` Focus solely on mechanical updates--do not add narration.`;
         }
-
-        instructions += `Never leave placeholders, never wrap the tracker block in commentary, and keep everything machine-parseable JSON.\n\n`;
+        return msg.trim();
     }
 
-    if (extensionSettings.enableHtmlPrompt && includeHtmlPrompt) {
-        instructions += `If appropriate, include inline HTML, CSS, and JS elements for creative, visual storytelling throughout your response:
-- Use them liberally to depict any in-world content that can be visualized (screens, posters, books, signs, letters, logos, crests, seals, medallions, labels, etc.), with creative license for animations, 3D effects, pop-ups, dropdowns, websites, and so on.
-- Style them thematically to match the theme (e.g., sleek for sci-fi, rustic for fantasy), ensuring text is visible.
-- Embed all resources directly (e.g., inline SVGs) so nothing relies on external fonts or libraries.
-- Place elements naturally in the narrative where characters would see or use them, with no limits on format or application.
-- These HTML/CSS/JS elements must be rendered directly without enclosing them in code fences.`;
+    let instructions = `Use the World of Darkness tracker blocks above as the definitive state. Do not emit tracker code fences in your reply; reference those values naturally in the narrative. When dice are needed, issue a [[WOD-ROLL {...}]] command and continue describing the scene while the extension resolves it.`;
+
+    if (includeContinuation) {
+        instructions += ` Keep roleplay immersive, letting injuries, resources, and scene notes shape character behavior.`;
     }
 
-    return instructions;
+    return instructions.trim();
 }
 
 /**
  * Generates a formatted contextual summary for SEPARATE mode injection.
- * Includes the full tracker data in original format (without code fences and separators).
- * Uses COMMITTED data (not displayed data) for generation context.
+ * Summaries are derived from the canonical WoD snapshot (same data sent to Together mode),
+ * so the model always sees the latest sheet/scene/dice state even if no prior JSON was emitted.
  *
  * @returns {string} Formatted contextual summary
  */
 export function generateContextualSummary() {
+    const snapshot = ensureContextSnapshot();
     const sections = [];
 
     if (extensionSettings.showUserStats) {
-        const sheetSummaries = collectSheetsForPrompt()
-            .map(serializeSheetForPrompt)
-            .filter(Boolean)
+        const sheetSummaries = parseJsonArray(snapshot.characterSheets)
             .map(buildSheetSummary)
             .filter(Boolean);
         if (sheetSummaries.length > 0) {
@@ -548,7 +273,7 @@ ${sheetSummaries.join('\n')}`);
     }
 
     if (extensionSettings.showInfoBox) {
-        const sceneInfo = parseSceneInfoBlock(committedTrackerData.infoBox);
+        const sceneInfo = parseJsonObject(snapshot.sceneInfo);
         const sceneSummary = buildSceneInfoSummary(sceneInfo);
         if (sceneSummary) {
             sections.push(`Scene Info: ${sceneSummary}`);
@@ -556,15 +281,17 @@ ${sheetSummaries.join('\n')}`);
     }
 
     if (extensionSettings.showCharacterThoughts) {
-        const diceEntries = clipArray(wodRuntimeState.diceLog || [], MAX_PROMPT_DICE_LOG);
+        const diceEntries = parseJsonArray(snapshot.diceLog);
         const diceSummary = buildDiceLogSummary(diceEntries);
         if (diceSummary) {
             sections.push(`Dice Log: ${diceSummary}`);
         }
     }
 
+    resetContextSnapshot();
     return sections.join('\n\n').trim();
 }
+
 export function generateSeparateUpdatePrompt() {
     const depth = extensionSettings.updateDepth;
     const messages = [];
@@ -590,15 +317,20 @@ export function generateSeparateUpdatePrompt() {
     }
 
     const trackerSnapshot = generateTrackerExample();
-    let instructionMessage = `</history>\n\n`;
-    instructionMessage += `Update the trackers below and return them in the exact JSON code fences requested.\n`;
-    if (trackerSnapshot) {
-        instructionMessage += `${trackerSnapshot}\n\n`;
-    }
-    instructionMessage += generateTrackerInstructions(false, false);
-    instructionMessage += `Provide ONLY those tracker code fences—no narration, no commentary.`;
+    let instructionMessage = `</history>
 
-    messages.push({
+`;
+    instructionMessage += `Use the tracker blocks below as the single source of truth. Update only the fields that changed and return the revised JSON fences exactly as formatted.
+`;
+    if (trackerSnapshot) {
+        instructionMessage += `${trackerSnapshot}
+
+`;
+    }
+    instructionMessage += generateTrackerInstructions({ mode: 'separate', includeContinuation: false });
+    instructionMessage += ` Provide ONLY those tracker code fences--no narration or commentary.`;
+
+messages.push({
         role: 'user',
         content: instructionMessage
     });

@@ -35,6 +35,12 @@ The v20 overhaul replaces the generic tracker panels with a fully structured WoD
   You can also use `extensions["third-party/v20-companion"].sheetId` or add a persona tag like `wod-sheet:vtm-brujah-valeria`. Metadata-driven links are read-only inside the UI so you always know when the persona manager is authoritative.
 - If no metadata is present the dropdown stays editable—select a sheet to create a global manual binding or leave it blank to rely on automatic name matching.
 
+### Tracker Injection Flow
+
+- The extension now injects the canonical `Character Sheets`, `Scene Info`, and `Dice Log` JSON code fences directly into the Together-mode prompt before every reply. The assistant no longer echoes those trackers; it simply references the blocks that already exist in context, keeping responses shorter and reducing hallucinations.
+- When Separate mode is enabled, the narration pass still omits trackers. A second “tracker update” pass replays the same canonical blocks and asks the model to edit only the fields that changed. The parser applies those edits back into the UI, so the extension remains authoritative.
+- Dice rolls continue to use `[[WOD-ROLL {...}]]` commands. The injected dice log is read-only during narration; only tracker-update prompts expect JSON fences in the response.
+
 ### Manual JSON Sync
 
 Sheets remain file-backed so you can keep authoritative copies in version control:
