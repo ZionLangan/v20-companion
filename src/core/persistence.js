@@ -563,7 +563,8 @@ function migrateToTrackerConfig() {
                 enabled: true,
                 name: 'Thoughts',
                 description: 'Internal monologue (in first person POV, up to three sentences long)'
-        };
+            };
+        }
     }
 }
 
