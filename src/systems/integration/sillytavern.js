@@ -92,18 +92,28 @@ export async function onMessageReceived(data) {
         return;
     }
 
+    const lastMessage = chat[chat.length - 1];
+    if (!lastMessage || lastMessage.is_user) {
+        return;
+    }
+
+    let responseText = lastMessage.mes || '';
+    const currentSwipeId = lastMessage.swipe_id || 0;
+    const processedRolls = processWodRollCommands(responseText);
+    const diceUpdated = processedRolls.modified;
+    if (diceUpdated) {
+        responseText = processedRolls.text;
+        lastMessage.mes = responseText;
+        if (lastMessage.swipes && lastMessage.swipes[currentSwipeId] !== undefined) {
+            lastMessage.swipes[currentSwipeId] = responseText;
+        }
+        updateDiceDisplayCore();
+    }
+
     if (extensionSettings.generationMode === 'together') {
         // In together mode, parse the response to extract RPG data
         // The message should be in chat[chat.length - 1]
-        const lastMessage = chat[chat.length - 1];
-        if (lastMessage && !lastMessage.is_user) {
-            let responseText = lastMessage.mes || '';
-            const processedRolls = processWodRollCommands(responseText);
-            if (processedRolls.modified) {
-                responseText = processedRolls.text;
-                lastMessage.mes = responseText;
-                updateDiceDisplayCore();
-            }
+        if (lastMessage) {
             // console.log('[RPG Companion] Parsing together mode response:', responseText);
 
             const parsedData = parseResponse(responseText);
@@ -184,11 +194,18 @@ export async function onMessageReceived(data) {
             // Save to chat metadata
             saveChatData();
         }
-    } else if (extensionSettings.generationMode === 'separate' && extensionSettings.autoUpdate) {
-        // In separate mode with auto-update, trigger update after message
-        setTimeout(async () => {
-            await updateRPGData(renderUserStats, renderInfoBox, renderThoughts, renderInventory);
-        }, 500);
+    } else {
+        // In separate mode we still need dice summaries to appear in the message bubble
+        if (diceUpdated) {
+            const messageId = chat.length - 1;
+            updateMessageBlock(messageId, lastMessage, { rerenderMessage: true });
+        }
+        if (extensionSettings.generationMode === 'separate' && extensionSettings.autoUpdate) {
+            // In separate mode with auto-update, trigger update after message
+            setTimeout(async () => {
+                await updateRPGData(renderUserStats, renderInfoBox, renderThoughts, renderInventory);
+            }, 500);
+        }
     }
 
     // Reset the swipe flag after generation completes

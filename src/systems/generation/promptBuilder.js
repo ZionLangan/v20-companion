@@ -192,18 +192,18 @@ function buildDiceLogSummary(entries) {
 export function generateTrackerExample() {
     const blocks = [];
 
-    if (extensionSettings.showUserStats) {
-        blocks.push([
-            '```Character Sheets',
-            buildCharacterSheetsBlock(),
-            '```'
-        ].join('\n'));
-    }
-
     if (extensionSettings.showInfoBox) {
         blocks.push([
             '```Scene Info',
             buildSceneInfoBlock(),
+            '```'
+        ].join('\n'));
+    }
+
+    if (extensionSettings.showUserStats) {
+        blocks.push([
+            '```Character Sheets',
+            buildCharacterSheetsBlock(),
             '```'
         ].join('\n'));
     }
@@ -242,7 +242,7 @@ export function generateTrackerInstructions(options = {}) {
         return msg.trim();
     }
 
-    let instructions = `Use the World of Darkness tracker blocks above as the definitive state. Do not emit tracker code fences in your reply; reference those values naturally in the narrative. When dice are needed, issue a [[WOD-ROLL {...}]] command and continue describing the scene while the extension resolves it.`;
+    let instructions = `Use the World of Darkness tracker blocks above as the definitive state. Do not emit tracker code fences in your reply; reference those values naturally in the narrative. When dice are needed, issue a [[WOD-ROLL {...}]] command and continue describing the scene while the extension resolves it. Each roll payload must be JSON shaped like {"sheetId":"active-character-id","pool":"Attribute + Ability (+ modifiers)","difficulty":6,"modifier":0,"willpower":false,"rerolls":0}. Example: [[WOD-ROLL {"sheetId":"vtm-ghoul-fixer","pool":"Perception + Investigation","difficulty":6,"willpower":false}]]. React to the inserted result (and the Dice Log block) rather than inventing outcomes.`;
 
     if (includeContinuation) {
         instructions += ` Keep roleplay immersive, letting injuries, resources, and scene notes shape character behavior.`;

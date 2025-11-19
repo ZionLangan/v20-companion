@@ -225,11 +225,11 @@ export const extensionState = {
 
 ### 4.1 LLM Tracker Sync (Step 7)
 
-1. **Character Sheets block** – The parser reads the JSON array emitted in the `Character Sheets` fence, sanitizes it (clamping dots/resources, validating health states, trimming strings), and deep-merges it into the active sheets via `recordWodChatOverride`. Only sheet IDs already registered in the chat are accepted, so stray data cannot inject new actors.
-2. **Scene Info block** – The single JSON object is normalized (location/time/weather/aspects/present characters) and written to `wodRuntimeState.sceneInfo`, which is persisted in `chat_metadata.rpg_companion_v20`. Clearing fields is as simple as returning empty arrays/objects; the sidebar updates silently and no text leaks into the roleplay transcript.
-3. **Dice Log block** – The client remains authoritative. Models should copy the log verbatim, and every `[[WOD-ROLL {...}]]` call rewrites the log from the true roll history before the next prompt injection. The parser ignores any attempt to fabricate results.
-4. **Prompt snapshots** – After applying edits, the extension re-serializes the active sheets, scene info, and dice log into the same JSON blocks. These canonical strings populate `committedTrackerData` so both Together and Separate modes send the exact state that the UI displays.
-
+1. **Character Sheets block** ? The parser reads the JSON array emitted in the `Character Sheets` fence, sanitizes it (clamping dots/resources, validating health states, trimming strings), and deep-merges it into the active sheets via `recordWodChatOverride`. Only sheet IDs already registered in the chat are accepted, and the prompt only injects the storyteller sheet plus persona/scene participants, so stray data cannot introduce new actors.
+2. **Scene Info block** ? The single JSON object is normalized (location/time/weather/aspects/present characters) and written to `wodRuntimeState.sceneInfo`, which is persisted in `chat_metadata.rpg_companion_v20`. Clearing fields is as simple as returning empty arrays/objects; the sidebar updates silently and no text leaks into the roleplay transcript.
+3. **Dice Log block** ? The client remains authoritative. Models should copy the log verbatim, and every `[[WOD-ROLL {...}]]` call rewrites the log from the true roll history before the next prompt injection. The parser ignores any attempt to fabricate results, so the LLM must always request a new outcome instead of inventing one.
+4. **Prompt snapshots** ? After applying edits, the extension re-serializes the active sheets, scene info, and dice log into the same JSON blocks. These canonical strings populate `committedTrackerData` so both Together and Separate modes send the exact state that the UI displays.
+5. **Dice instructions** ? Together-mode prompts explicitly document the `[[WOD-ROLL {...}]]` schema (see ?5.4) so the assistant knows which fields are required before requesting a pool mid-response.
 ---
 
 ## 5. Dice Pool Specification

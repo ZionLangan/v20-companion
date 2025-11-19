@@ -116,6 +116,24 @@ import { ensureHtmlCleaningRegex, detectConflictingRegexScripts } from './src/sy
 import { setupMemoryRecollectionButton, updateMemoryRecollectionButton } from './src/systems/features/memoryRecollection.js';
 import { initLorebookLimiter } from './src/systems/features/lorebookLimiter.js';
 
+let eventsRegistered = false;
+
+function bindExtensionEvents() {
+    if (eventsRegistered) {
+        return;
+    }
+    registerAllEvents({
+        [event_types.MESSAGE_SENT]: onMessageSent,
+        [event_types.GENERATION_STARTED]: onGenerationStarted,
+        [event_types.MESSAGE_RECEIVED]: onMessageReceived,
+        [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar],
+        [event_types.MESSAGE_SWIPED]: onMessageSwiped,
+        [event_types.USER_MESSAGE_RENDERED]: updatePersonaAvatar,
+        [event_types.SETTINGS_UPDATED]: updatePersonaAvatar
+    });
+    eventsRegistered = true;
+}
+
 // Integration modules
 import {
     commitTrackerData,
@@ -579,6 +597,13 @@ jQuery(async () => {
             console.error('[RPG Companion] Settings load failed, continuing with defaults:', error);
         }
 
+        try {
+            bindExtensionEvents();
+        } catch (error) {
+            console.error('[RPG Companion] Event registration failed:', error);
+            throw error; // Can't continue without core events
+        }
+
         // Load bundled WoD sheets from disk before wiring UI
         try {
             await loadBundledSheets();
@@ -645,22 +670,6 @@ jQuery(async () => {
             // Non-critical - continue anyway
         }
 
-        // Register all event listeners
-        try {
-            registerAllEvents({
-                [event_types.MESSAGE_SENT]: onMessageSent,
-                [event_types.GENERATION_STARTED]: onGenerationStarted,
-                [event_types.MESSAGE_RECEIVED]: onMessageReceived,
-                [event_types.CHAT_CHANGED]: [onCharacterChanged, updatePersonaAvatar],
-                [event_types.MESSAGE_SWIPED]: onMessageSwiped,
-                [event_types.USER_MESSAGE_RENDERED]: updatePersonaAvatar,
-                [event_types.SETTINGS_UPDATED]: updatePersonaAvatar
-            });
-        } catch (error) {
-            console.error('[RPG Companion] Event registration failed:', error);
-            throw error; // This is critical - can't continue without events
-        }
-
         console.log('[RPG Companion] ✅ Extension loaded successfully');
     } catch (error) {
         console.error('[RPG Companion] ❌ Critical initialization failure:', error);
@@ -674,3 +683,4 @@ jQuery(async () => {
         );
     }
 });
+

@@ -33,6 +33,9 @@ function buildCanonicalSheets(limit = MAX_PROMPT_SHEETS) {
     const seen = new Set();
 
     const pushSheet = (sheet) => {
+        if (selected.length >= limit) {
+            return;
+        }
         if (sheet && sheet.id && !seen.has(sheet.id)) {
             selected.push(serializeSheetForPrompt(sheet));
             seen.add(sheet.id);
@@ -43,22 +46,21 @@ function buildCanonicalSheets(limit = MAX_PROMPT_SHEETS) {
 
     const personaEntries = collectPersonaBindings();
     personaEntries.forEach(entry => {
-        if (selected.length >= limit) {
-            return;
-        }
         const sheet = entry.sheet || getWodSheet(entry.sheetId);
-        if (sheet) {
-            pushSheet(sheet);
-        }
+        pushSheet(sheet);
     });
 
-    const order = wodRuntimeState.sheetOrder || [];
-    order.some(sheetId => {
-        if (selected.length >= limit) {
-            return true;
+    const sceneEntries = Array.isArray(wodRuntimeState.sceneInfo?.presentCharacters)
+        ? wodRuntimeState.sceneInfo.presentCharacters
+        : [];
+    const sceneSheetIds = [];
+    sceneEntries.forEach(entry => {
+        if (entry && entry.sheetId && !sceneSheetIds.includes(entry.sheetId)) {
+            sceneSheetIds.push(entry.sheetId);
         }
+    });
+    sceneSheetIds.forEach(sheetId => {
         pushSheet(getWodSheet(sheetId));
-        return false;
     });
 
     return selected.slice(0, limit);
