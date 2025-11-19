@@ -611,4 +611,3 @@ function cloneDiceLogEntries(entries) {
         return [];
     }
 }
-}
