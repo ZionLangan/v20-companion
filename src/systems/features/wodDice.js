@@ -382,7 +382,6 @@ export function processWodRollCommands(text, options = {}) {
     const executedRolls = [];
     let updatedText = text;
 
-const ROLL_TAG_REGEX = /\[\[WOD-ROLL\s+([\s\S]*?)\]\]/gi;
         const payload = parseRollPayload(payloadText);
         if (!payload) {
             return match;
